@@ -1,20 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace transmitter_alpha_common;
+﻿namespace transmitter_alpha_common;
 
 public class CommonException : Exception
 {
     public string Fault { get; }
     public virtual string Specifier { get; } = "unknown";
 
-    public CommonException(string fault) : base()
+    public CommonException(string fault) : base($"Error code: '{fault}'")
     {
         Fault = fault;
     }
 
-    public CommonException(string fault, string specifier) : base()
+    public CommonException(string fault, string specifier) : base($"Error code: '{specifier}:{fault}'")
     {
         Fault = fault;
         Specifier = specifier;

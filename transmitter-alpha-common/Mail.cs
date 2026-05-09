@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace transmitter_alpha_common;
@@ -12,12 +9,11 @@ public class Mail(MailType mailType, string data)
     public string Data { get; } = data;
 }
 
-public enum MailType
+public enum MailType : byte
 {
-    Message, Receipt
+    Message, CacheUpdate
 }
 
-[JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(Mail))]
 [JsonSerializable(typeof(Profile))]
 [JsonSerializable(typeof(Dictionary<string, string>))]

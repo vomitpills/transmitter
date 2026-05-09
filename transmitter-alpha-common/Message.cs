@@ -1,12 +1,9 @@
 ﻿using System.Collections;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace transmitter_alpha_common;
 
@@ -34,16 +31,15 @@ public class Message : IDictionary<string, string>
 
     public string this[string key] { get => ((IDictionary<string, string>)values)[key]; set => ((IDictionary<string, string>)values)[key] = value; }
 
-    private static readonly JsonSerializerOptions visualSerializerOptions = new(Serializer.JsonSerializerOptions) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    public static readonly JsonSerializerOptions VisualSerializerOptions = new(Serializer.JsonSerializerOptions) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public async Task Serialize(Stream stream, Logger? logger)
     {
-        logger ??= Logger.Shared;
-        using Logger.ContextTracker contextTracker = logger.LogContext(nameof(Serialize));
+        using Logger.ContextTracker? contextTracker = logger?.LogContext(nameof(Serialize));
         string json = JsonSerializer.Serialize(values, Serializer.JsonSerializerOptions);
         byte[] data = Encoding.UTF8.GetBytes(json);
 
-        contextTracker.Write(JsonSerializer.Serialize(Censor(values), visualSerializerOptions));
+        contextTracker?.Write(JsonSerializer.Serialize(Censor(values), VisualSerializerOptions));
 
         await stream.WriteAsync(ProtocolMeta.Signature);
         using Aes aes = Aes.Create();
@@ -66,7 +62,7 @@ public class Message : IDictionary<string, string>
         await stream.WriteAsync(hash);
     }
 
-    private static Dictionary<string, string> Censor(IReadOnlyDictionary<string, string> values)
+    public static Dictionary<string, string> Censor(IReadOnlyDictionary<string, string> values)
     {
         Dictionary<string, string> copy = new(values);
 
@@ -79,16 +75,18 @@ public class Message : IDictionary<string, string>
         return copy;
     }
 
-    private static string CensorString(string secret) => "<withheld>";
+    private static string CensorString(string secret)
+    {
+        return "<withheld>";
+    }
 
     public static async Task<Message> Deserialize(Stream stream, Logger? logger, CancellationToken cancellationToken = default)
     {
-        logger ??= Logger.Shared;
-        using Logger.ContextTracker contextTracker = logger.LogContext(nameof(Deserialize));
+        using Logger.ContextTracker? contextTracker = logger?.LogContext(nameof(Deserialize));
 
         byte[] signatureBuffer = new byte[ProtocolMeta.Signature.Length];
         await stream.ReadExactlyAsync(signatureBuffer, cancellationToken);
-        if (!ProtocolMeta.Signature.SequenceEqual(signatureBuffer))
+        if (!ProtocolMeta.Signature.Span.SequenceEqual(signatureBuffer))
             throw new("invalid sig");
 
         using Aes aes = Aes.Create();
@@ -116,7 +114,7 @@ public class Message : IDictionary<string, string>
 
         Dictionary<string, string> values = JsonSerializer.Deserialize<Dictionary<string, string>>(data, Serializer.JsonSerializerOptions) ?? throw new InvalidOperationException("failed to deserialize");
 
-        contextTracker.Write(JsonSerializer.Serialize(Censor(values), visualSerializerOptions));
+        contextTracker?.Write(JsonSerializer.Serialize(Censor(values), VisualSerializerOptions));
 
         return new(values);
     }
@@ -177,7 +175,81 @@ public class Message : IDictionary<string, string>
     }
 }
 
-internal static class ProtocolMeta
+public static class ProtocolMeta
 {
-    public static byte[] Signature = Encoding.ASCII.GetBytes("TRNSMTR-A01");
+    public static ReadOnlyMemory<byte> Signature { get; } = Encoding.ASCII.GetBytes("TRNSMTR-A02"); // make private and expose a Sign(Stream) method
+
+    public static bool ValidateSignature(Stream stream)
+    {
+        Span<byte> buffer = stackalloc byte[Signature.Length];
+        stream.ReadExactly(buffer);
+        return Signature.Span.SequenceEqual(buffer);
+    }
+
+    public static void AssertSignature(Stream stream)
+    {
+        if (!ValidateSignature(stream))
+            throw new ArgumentOutOfRangeException(nameof(stream), "Signature mismatch");
+    }
+}
+
+// represents either an auth token acquired from a server, or an invite code needed to acquire said token
+public readonly struct ClientSecret : IEquatable<ClientSecret>
+{
+    public const int SERIALIZED_LENGTH = 16;
+
+    public bool IsAuthToken { get; }
+    public ReadOnlyMemory<byte> Data { get; }
+
+    private ClientSecret(bool isAuthToken, ReadOnlyMemory<byte> data)
+    {
+        IsAuthToken = isAuthToken;
+        Data = data;
+    }
+
+    public void Serialize(Stream stream)
+    {
+        stream.WriteByte(Convert.ToByte(IsAuthToken));
+        stream.Write(Data.Span);
+    }
+
+    public static ClientSecret EmitAuthToken() => Emit(true);
+    public static ClientSecret EmitInviteCode() => Emit(false);
+    private static ClientSecret Emit(bool isAuthToken) => new(isAuthToken, RandomNumberGenerator.GetBytes(SERIALIZED_LENGTH - 1));
+
+    public ReadOnlyMemory<byte> Serialize()
+    {
+        byte[] result = new byte[SERIALIZED_LENGTH];
+        using MemoryStream stream = new(result);
+        Serialize(stream);
+        return result;
+    }
+
+    public static ClientSecret Deserialize(Stream stream)
+    {
+        bool isAuthToken = Convert.ToBoolean(stream.ReadByte());
+        byte[] buffer = new byte[SERIALIZED_LENGTH - 1];
+        stream.ReadExactly(buffer);
+        return new(isAuthToken, buffer);
+    }
+
+    public string Encode()
+    {
+        using MemoryStream stream = new();
+        Serialize(stream);
+        return Convert.ToBase64String(stream.ToArray());
+    }
+
+    public static ClientSecret Decode(string code)
+    {
+        byte[] data = Convert.FromBase64String(code);
+        using MemoryStream stream = new(data);
+        return Deserialize(stream);
+    }
+
+    public bool Equals(ClientSecret other) => IsAuthToken == other.IsAuthToken && Data.Span.SequenceEqual(other.Data.Span);
+    public override bool Equals([NotNullWhen(true)] object? obj) => obj is ClientSecret other && Equals(other);
+    public override int GetHashCode() => HashCode.Combine(IsAuthToken, Data.ToArray().Aggregate(0, (a, b) => HashCode.Combine(a, b)));
+    public static bool operator ==(ClientSecret left, ClientSecret right) => left.Equals(right);
+    public static bool operator !=(ClientSecret left, ClientSecret right) => !left.Equals(right);
 }

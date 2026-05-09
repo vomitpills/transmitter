@@ -1,10 +1,9 @@
 ﻿using System.Diagnostics;
-using System.Reflection.Metadata;
 using System.Text;
 
 namespace transmitter_alpha_common;
 
-public class Logger(string name)
+public class Logger(string name, ConsoleColor? color = null)
 {
     public static Logger Shared { get; } = new("<shared>");
 
@@ -30,19 +29,63 @@ public class Logger(string name)
         isInputEnabled = false;
     }
 
+    public static void Reset()
+    {
+        LastEphemeral = false;
+        Console.Clear();
+    }
+
     public static void LogInputError(string message, string? title = null) => LogNote(title, message, ConsoleColor.Red);
     public static void LogInputNote(string message) => LogNote(null, message, ConsoleColor.White);
 
-    public static void LogMessage(string from, string content, bool doBeep = true)
+    public static void LogMessage(Profile profile, string content, bool doBeep = true)
     {
         if (doBeep && OperatingSystem.IsWindows())
+            Console.Beep(profile.BeepFrequency, 100);
+        LogNote($"from: {profile.DisplayName}", content, profile.Color);
+    }
+
+    public static void LogProfileUpdate(Profile oldProfile, Profile newProfile)
+    {
+        static void LogProfile(Profile profile)
         {
-            (int Start, int End) toneRange = (300, 1400);
-            int tone = (int)((double)int.Abs(from.GetHashCode()) / int.MaxValue * (toneRange.End - toneRange.Start) + toneRange.Start);
-            Console.Beep(tone, 100);
+            LogNote(null, profile.DisplayName, profile.Color);
         }
 
-        LogNote($"from: {from}", content);
+        if (OperatingSystem.IsWindows())
+        {
+            Console.Beep(oldProfile.BeepFrequency, 100);
+            Console.Beep(newProfile.BeepFrequency, 100);
+        }
+
+        LogProfile(oldProfile);
+        LogProfile(newProfile);
+
+        if (isInputEnabled)
+            EraseInput();
+
+        writeSemaphore.Wait();
+        try
+        {
+            Console.CursorTop -= 7;
+            int arrowHeight = 3;
+            Console.BackgroundColor = ConsoleColor.Black;
+            Console.ForegroundColor = ConsoleColor.White;
+            for (int i = 0; i < arrowHeight; i++)
+            {
+                Console.CursorLeft = Console.BufferWidth - 5 - 4;
+                Console.CursorTop++;
+                Console.Write(i == arrowHeight - 1? "▼" : '│');
+            }
+            Console.CursorTop += 6 - arrowHeight;
+        }
+        finally
+        {
+            writeSemaphore.Release();
+        }
+
+        if (isInputEnabled)
+            WriteInput();
     }
 
     public static void LogNote(string? title, string content, ConsoleColor? color = null)
@@ -147,8 +190,11 @@ public class Logger(string name)
     {
         static void Error()
         {
-            if (OperatingSystem.IsWindows())
-                Console.Beep(500, 100);
+            _ = Task.Run(() =>
+            {
+                if (OperatingSystem.IsWindows())
+                    Console.Beep(500, 10);
+            });
         }
 
         if (!isInputEnabled)
@@ -311,7 +357,7 @@ public class Logger(string name)
 
     private static readonly ConsoleColor[] validColors = [ConsoleColor.Green, ConsoleColor.Magenta, ConsoleColor.Blue, ConsoleColor.Cyan];
     private static ConsoleColor StringToColor(string text) => validColors[int.Abs(text.GetHashCode()) % validColors.Length];
-    private ConsoleColor Color => StringToColor(Name);
+    private ConsoleColor Color => color ?? StringToColor(Name);
 
     public ContextTracker LogContext(string action, string? @object = null) => new($"{action}" + (@object is null ? string.Empty : " " + @object), this);
 
@@ -340,7 +386,7 @@ public class Logger(string name)
 
         public void Dispose()
         {
-            logger.Write($"=== BEGIN {name.ToUpper()} ===", ConsoleColor.DarkGray, null, true);
+            logger.Write($"=== FINISH {name.ToUpper()} ===", ConsoleColor.DarkGray, null, true);
             GC.SuppressFinalize(this);
         }
     }

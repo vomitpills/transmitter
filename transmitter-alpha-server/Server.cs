@@ -1,86 +1,82 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Net;
-using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Channels;
+﻿using System.Security.Cryptography;
 using transmitter_alpha_common;
 
 namespace transmitter_alpha_server;
 
-internal static class Program
+public partial class Server : IDisposable
 {
-    public static async Task Main()
-    {
-        Server server = new();
-        server.Start(57181, 57182);
-        await Task.Delay(Timeout.Infinite);
-    }
-}
+    private static readonly TimeSpan AccessCodeExpirationTime = TimeSpan.FromMinutes(1);
 
-internal class Transaction(string senderId, Mail mail)
-{
-    public string Id { get; } = Guid.NewGuid().ToString();
-    public string SenderId { get; } = senderId;
-    public Mail Mail { get; } = mail;
-    public Func<Task>? Callback { get; private set; }
-
-    public void SetCallback(Func<Task> callback) => Callback = callback;
-}
-
-public partial class Server
-{
-    private readonly List<string> validInvites = [];
-    private readonly Dictionary<string, string> differedChannelKeysAndSecrets = []; // add expiration
-    private readonly Dictionary<string, Profile> profiles = [];
-
-    private readonly Dictionary<string, string> peerSecretToId = [];
-    private IEnumerable<string> KnownPeerIds => peerSecretToId.Values;
-
-    private readonly List<Task> peerCommConnections = [];
-    private readonly List<string> peerDifferedConnections = [];
-
-    private readonly Dictionary<string, Channel<Transaction>> backlog = [];
+    private readonly PersistentServerState persistentState = PersistentServerState.LoadOrCreate(Path.Join(Environment.CurrentDirectory, "state"));
+    private readonly Dictionary<ReturnLineAccessCode, DateTimeOffset> returnLineAccessCodes = [];
+    private readonly List<Guid> returnLineReachablePeers = [];
 
     bool isRunning = false;
 
-    public void Start(int commPort, int updatePort)
+    public void Start(int port, int returnLinePort)
     {
         if (isRunning)
             throw new InvalidOperationException("already running");
         isRunning = true;
 
-        Task.Run(() => StartCommLoop(commPort));
-        Task.Run(() => StartUpdateLoop(updatePort));
+        Task.Run(() => StartLoop(port));
+        Task.Run(() => StartReturnLineLoop(returnLinePort));
     }
 
-    private static string GetNewSecret() => RandomNumberGenerator.GetHexString(64);
-    private static string GetNewId() => RandomNumberGenerator.GetHexString(16);
+    public ClientSecret EmitInviteCode() => persistentState.EmitInviteCode();
 
     private Profile? CheckPeerState(Message incomingRequest, bool checkProfile = true) => CheckPeerState(incomingRequest, out _, checkProfile);
 
-    private Profile? CheckPeerState(Message incomingRequest, out string auth, bool checkProfile = true)
+    private Profile? CheckPeerState(Message incomingRequest, out ClientSecret auth, bool checkProfile = true)
     {
         auth = CheckAuth(incomingRequest);
         if (!checkProfile)
             return null;
-        string id = peerSecretToId[auth];
-        return CheckProfile(id) ?? throw new StateException("no-profile");
+        return persistentState.GetProfile(auth) ?? throw new StateException("no-profile");
     }
 
-    private string CheckAuth(Message incomingRequest)
+    private ClientSecret CheckAuth(Message incomingRequest)
     {
-        string auth = incomingRequest["auth"];
-        if (!peerSecretToId.ContainsKey(auth))
+        ClientSecret auth = ClientSecret.Decode(incomingRequest["auth"]);
+        if (!persistentState.UserExists(auth))
             throw new FaultyDataException("auth");
         return auth;
     }
 
-    private Profile? CheckProfile(string id)
+    public string EmitReturnLineAccessCode(ClientSecret auth)
     {
-        profiles.TryGetValue(id, out Profile? profile);
-        return profile;
+        ReturnLineAccessCode accessCode = new(auth, RandomNumberGenerator.GetHexString(16));
+        DateTimeOffset expiresOn = DateTimeOffset.UtcNow + AccessCodeExpirationTime;
+        returnLineAccessCodes.Add(accessCode, expiresOn);
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(AccessCodeExpirationTime);
+            lock (returnLineAccessCodes)
+                returnLineAccessCodes.Remove(accessCode);
+        });
+        return accessCode.Secret;
+    }
+
+    public void AuthenticateReturnLineConnection(ClientSecret auth, string accessCode)
+    {
+        ReturnLineAccessCode code = new(auth, accessCode);
+        lock (returnLineAccessCodes)
+        {
+            if (!returnLineAccessCodes.TryGetValue(code, out DateTimeOffset expiresAt))
+                throw new StateException("flow");
+            returnLineAccessCodes.Remove(code);
+            if (DateTime.UtcNow > expiresAt)
+                throw new StateException("expired");
+        }
+    }
+
+    private readonly record struct ReturnLineAccessCode(ClientSecret Auth, string Secret);
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        listener?.Dispose();
+        returnLineListener?.Dispose();
+        persistentState.Dispose();
     }
 }
