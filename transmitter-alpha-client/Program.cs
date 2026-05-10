@@ -15,8 +15,8 @@ internal static class Program
 #endif
     private static string ConfigFileLocation { get; } = AppConfig.GetFileLocation(CONFIG_NAME);
 
-    private const int RECONNECT_ATTEMPTS = 3;
-    private static readonly TimeSpan reconnectInterval = TimeSpan.FromSeconds(10);
+    private const int RECONNECT_ATTEMPTS = 5;
+    private static readonly TimeSpan reconnectInterval = TimeSpan.FromSeconds(5);
 
     public static async Task Main()
     {
@@ -92,9 +92,7 @@ internal static class Program
                 int i = RECONNECT_ATTEMPTS;
                 for (; i > 0; i--)
                 {
-                    recoveryLogger.LogProgress($"Attempting to reconnect in {reconnectInterval.TotalSeconds}s ({i}/{RECONNECT_ATTEMPTS})");
-                    await Task.Delay(reconnectInterval);
-                    recoveryLogger.LogProgress("Attempting to reconnect");
+                    recoveryLogger.LogProgress($"Attempting to reconnect ({i}/{RECONNECT_ATTEMPTS})");
                     await client.Stop();
                     try
                     {
@@ -102,7 +100,13 @@ internal static class Program
                         healthCheckTask = client.AwaitAllTasks();
                         break;
                     }
-                    catch { }
+                    catch
+                    {
+                        if (i is 0)
+                            continue;
+                        recoveryLogger.LogProgress($"Failed to reconnect. Sleeping {reconnectInterval.TotalSeconds}s before next attempt");
+                        await Task.Delay(reconnectInterval);
+                    }
                 }
                 if (i is 0)
                 {
