@@ -76,6 +76,10 @@ internal static class Program
                         Logger.EnableInput();
                         break;
 
+                    case "!togglesound":
+                        Logger.LogNote(null, $"Switched sound to {(Logger.ToggleSound()? "ON" : "OFF")} (will reset on app restart)", ConsoleColor.Cyan);
+                        break;
+
                     default:
                         Mail mail = new(MailType.Message, message);
                         await client.SendMail(mail);

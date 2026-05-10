@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace transmitter_alpha_common;
@@ -8,6 +9,9 @@ public class Logger(string name, ConsoleColor? color = null)
     public static Logger Shared { get; } = new("<shared>");
 
     private static bool LastEphemeral = false;
+
+    private static bool isSoundEnabled = true;
+    public static bool ToggleSound() => isSoundEnabled = !isSoundEnabled;
 
     public string Name { get; } = name;
 
@@ -40,7 +44,7 @@ public class Logger(string name, ConsoleColor? color = null)
 
     public static void LogMessage(Profile profile, string content, bool doBeep = true)
     {
-        if (doBeep && OperatingSystem.IsWindows())
+        if (isSoundEnabled && doBeep && OperatingSystem.IsWindows())
             Console.Beep(profile.BeepFrequency, 100);
         LogNote($"from: {profile.DisplayName}", content, profile.Color);
     }
@@ -52,7 +56,7 @@ public class Logger(string name, ConsoleColor? color = null)
             LogNote(null, profile.DisplayName, profile.Color);
         }
 
-        if (OperatingSystem.IsWindows())
+        if (isSoundEnabled && OperatingSystem.IsWindows())
         {
             Console.Beep(oldProfile.BeepFrequency, 100);
             Console.Beep(newProfile.BeepFrequency, 100);
@@ -192,7 +196,7 @@ public class Logger(string name, ConsoleColor? color = null)
         {
             _ = Task.Run(() =>
             {
-                if (OperatingSystem.IsWindows())
+                if (isSoundEnabled && OperatingSystem.IsWindows())
                     Console.Beep(500, 10);
             });
         }
