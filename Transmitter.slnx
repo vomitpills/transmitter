@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Transmitter/Transmitter.csproj" />
+  <Project Path="Transmitter.Client/Transmitter.Client.csproj" />
+  <Project Path="Transmitter.Server/Transmitter.Server.csproj" />
+</Solution>
