@@ -81,7 +81,7 @@ internal static class Program
                         break;
 
                     default:
-                        Mail mail = new(MailType.Message, message);
+                        OldMail mail = new(MailType.Message, message);
                         await client.SendMail(mail);
                         Logger.LogMessage(client.Profile, message, false);
                         break;

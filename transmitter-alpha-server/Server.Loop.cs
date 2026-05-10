@@ -38,14 +38,14 @@ partial class Server
             {
                 try
                 {
-                    Message incomingRequest = await Message.Deserialize(stream, logger);
+                    OldMessage incomingRequest = await OldMessage.Deserialize(stream, logger);
 
-                    Message response = await Respond(incomingRequest);
+                    OldMessage response = await Respond(incomingRequest);
                     await response.Serialize(stream, logger);
                 }
                 catch (CommonException e)
                 {
-                    Message errMessage = new()
+                    OldMessage errMessage = new()
                     {
                         ["status"] = "err",
                         ["cause"] = e.Serialize()
@@ -61,7 +61,7 @@ partial class Server
         }
     }
 
-    private async Task<Message> Respond(Message incomingRequest)
+    private async Task<OldMessage> Respond(OldMessage incomingRequest)
     {
         switch (incomingRequest["intent"])
         {
@@ -82,7 +82,7 @@ partial class Server
                 {
                     CheckPeerState(incomingRequest, out ClientSecret auth, false);
 
-                    Profile profile = JsonSerializer.Deserialize<Profile>(incomingRequest["data"], Serializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
+                    Profile profile = JsonSerializer.Deserialize<Profile>(incomingRequest["data"], OldSerializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
                     persistentState.UpdateProfile(auth, profile);
 
                     Guid profileOwnerId = persistentState.GetId(auth);
@@ -120,7 +120,7 @@ partial class Server
 
                     Guid senderId = persistentState.GetId(auth);
                     Guid recipient = Guid.Parse(incomingRequest["recipient"]);
-                    Mail mail = JsonSerializer.Deserialize<Mail>(incomingRequest["mail"], Serializer.JsonSerializerOptions) ?? throw new FaultyDataException("mail");
+                    OldMail mail = JsonSerializer.Deserialize<OldMail>(incomingRequest["mail"], OldSerializer.JsonSerializerOptions) ?? throw new FaultyDataException("mail");
 
                     if (await PostUpdate(senderId, recipient, mail))
                         return new()
@@ -153,7 +153,7 @@ partial class Server
                     return new()
                     {
                         ["status"] = "ok",
-                        ["profile"] = JsonSerializer.Serialize(profile, Serializer.JsonSerializerOptions)
+                        ["profile"] = JsonSerializer.Serialize(profile, OldSerializer.JsonSerializerOptions)
                     };
                 }
 
@@ -162,7 +162,7 @@ partial class Server
         }
     }
 
-    private async Task<bool> PostUpdate(Guid sender, Guid receiver, Mail mail)
+    private async Task<bool> PostUpdate(Guid sender, Guid receiver, OldMail mail)
     {
         if (receiver == Guid.Empty)
         {

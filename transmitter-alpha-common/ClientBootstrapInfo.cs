@@ -12,7 +12,7 @@ public readonly struct ClientBootstrapInfo(IPAddress serverAddress, ushort commP
 
     public void Serialize(Stream stream)
     {
-        stream.Write(ProtocolMeta.Signature.Span);
+        stream.Write(OldProtocolMeta.Signature.Span);
         stream.Write(ServerAddress.GetAddressBytes());
         stream.Write(BitConverter.GetBytes(CommPort));
         stream.Write(BitConverter.GetBytes(ReturnLinePort));
@@ -21,7 +21,7 @@ public readonly struct ClientBootstrapInfo(IPAddress serverAddress, ushort commP
 
     public static ClientBootstrapInfo Deserialize(Stream stream)
     {
-        ProtocolMeta.AssertSignature(stream);
+        OldProtocolMeta.AssertSignature(stream);
 
         Span<byte> addressBuffer = stackalloc byte[4];
         stream.ReadExactly(addressBuffer);

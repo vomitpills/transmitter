@@ -25,9 +25,9 @@ public partial class Server : IDisposable
 
     public ClientSecret EmitInviteCode() => persistentState.EmitInviteCode();
 
-    private Profile? CheckPeerState(Message incomingRequest, bool checkProfile = true) => CheckPeerState(incomingRequest, out _, checkProfile);
+    private Profile? CheckPeerState(OldMessage incomingRequest, bool checkProfile = true) => CheckPeerState(incomingRequest, out _, checkProfile);
 
-    private Profile? CheckPeerState(Message incomingRequest, out ClientSecret auth, bool checkProfile = true)
+    private Profile? CheckPeerState(OldMessage incomingRequest, out ClientSecret auth, bool checkProfile = true)
     {
         auth = CheckAuth(incomingRequest);
         if (!checkProfile)
@@ -35,7 +35,7 @@ public partial class Server : IDisposable
         return persistentState.GetProfile(auth) ?? throw new StateException("no-profile");
     }
 
-    private ClientSecret CheckAuth(Message incomingRequest)
+    private ClientSecret CheckAuth(OldMessage incomingRequest)
     {
         ClientSecret auth = ClientSecret.Decode(incomingRequest["auth"]);
         if (!persistentState.UserExists(auth))

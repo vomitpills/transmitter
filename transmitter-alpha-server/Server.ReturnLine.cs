@@ -38,7 +38,7 @@ partial class Server
         {
             try
             {
-                Message authRequest = await Message.Deserialize(stream, logger);
+                OldMessage authRequest = await OldMessage.Deserialize(stream, logger);
                 if (authRequest["intent"] is not "check-in")
                     throw new MessageStructureException("intent");
 
@@ -46,7 +46,7 @@ partial class Server
                 AuthenticateReturnLineConnection(auth, authRequest["key"]);
                 peerId = persistentState.GetId(auth);
 
-                await new Message()
+                await new OldMessage()
                 {
                     ["status"] = "ok"
                 }.Serialize(stream, logger);
@@ -54,7 +54,7 @@ partial class Server
             }
             catch (CommonException e)
             {
-                Message errMessage = new()
+                OldMessage errMessage = new()
                 {
                     ["status"] = "err",
                     ["cause"] = e.Serialize()
@@ -86,17 +86,17 @@ partial class Server
                 try
                 {
                     Transaction transaction = await persistentState.BeginTransactionReadAsync(peerId);
-                    Message msg = new()
+                    OldMessage msg = new()
                     {
                         ["type"] = "mail",
                         ["from"] = transaction.SenderId.ToString(),
-                        ["mail"] = JsonSerializer.Serialize(transaction.Mail, Serializer.JsonSerializerOptions)
+                        ["mail"] = JsonSerializer.Serialize(transaction.Mail, OldSerializer.JsonSerializerOptions)
                     };
                     await semaphore.WaitAsync();
                     await msg.Serialize(stream, logger);
 
                     using CancellationTokenSource cancellationTokenSource = new(TimeSpan.FromSeconds(10));
-                    Message response = await Message.Deserialize(stream, logger, cancellationTokenSource.Token);
+                    OldMessage response = await OldMessage.Deserialize(stream, logger, cancellationTokenSource.Token);
                     if (response["status"] is "ok")
                         persistentState.AdvanceTransactionQueue(peerId);
                     else
@@ -110,7 +110,7 @@ partial class Server
         }
         catch (CommonException e)
         {
-            Message errMessage = new()
+            OldMessage errMessage = new()
             {
                 ["status"] = "err",
                 ["cause"] = e.Serialize()
@@ -135,13 +135,13 @@ partial class Server
         semaphore.Wait();
         try
         {
-            Message keepAliveRequest = new()
+            OldMessage keepAliveRequest = new()
             {
                 ["type"] = "ping"
             };
             await keepAliveRequest.Serialize(stream, logger);
 
-            Message keepAliveResponse = await Message.Deserialize(stream, logger);
+            OldMessage keepAliveResponse = await OldMessage.Deserialize(stream, logger);
 
             switch (keepAliveResponse["status"])
             {

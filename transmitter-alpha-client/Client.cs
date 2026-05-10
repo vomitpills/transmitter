@@ -83,13 +83,13 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
         commSemaphore.Wait();
         try
         {
-            Message keepAliveRequest = WithAuth(new()
+            OldMessage keepAliveRequest = WithAuth(new()
             {
                 ["intent"] = "ping"
             });
             await keepAliveRequest.Serialize(stream, null);
 
-            Message keepAliveResponse = await Message.Deserialize(stream, null);
+            OldMessage keepAliveResponse = await OldMessage.Deserialize(stream, null);
 
             switch (keepAliveResponse["status"])
             {
@@ -112,14 +112,14 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
         if (BootstrapInfo.ClientSecret.IsAuthToken)
             return;
 
-        Message registerRequest = new()
+        OldMessage registerRequest = new()
         {
             ["intent"] = "register",
             ["invite-code"] = BootstrapInfo.ClientSecret.Encode()
         };
         await registerRequest.Serialize(stream, logger);
 
-        Message getIdResponse = await Message.Deserialize(stream, logger);
+        OldMessage getIdResponse = await OldMessage.Deserialize(stream, logger);
         BootstrapInfo = getIdResponse["status"] switch
         {
             "ok" => BootstrapInfo with { ClientSecret = ClientSecret.Decode(getIdResponse["secret"]) },
@@ -131,13 +131,13 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
 
     private async Task CheckIn(Stream stream, Logger logger, bool allowRecursion = true)
     {
-        Message checkInRequest = WithAuth(new()
+        OldMessage checkInRequest = WithAuth(new()
         {
             ["intent"] = "check-in"
         });
         await checkInRequest.Serialize(stream, logger);
 
-        Message checkInResponse = await Message.Deserialize(stream, logger);
+        OldMessage checkInResponse = await OldMessage.Deserialize(stream, logger);
         switch (checkInResponse["status"])
         {
             case "ok":
@@ -171,14 +171,14 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
         Stream stream = returnLineClient.GetStream();
         returnLineLogger.LogProgress("Connected returnline socket");
 
-        Message checkInRequest = WithAuth(new()
+        OldMessage checkInRequest = WithAuth(new()
         {
             ["intent"] = "check-in",
             ["key"] = key
         });
         await checkInRequest.Serialize(stream, returnLineLogger);
 
-        Message response = await Message.Deserialize(stream, returnLineLogger);
+        OldMessage response = await OldMessage.Deserialize(stream, returnLineLogger);
         if (response["status"] is not "ok")
             throw new InvalidOperationException();
 
@@ -190,13 +190,13 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
             {
                 while (returnLineClient.Connected)
                 {
-                    Message incomingMessage = await Message.Deserialize(stream, null);
+                    OldMessage incomingMessage = await OldMessage.Deserialize(stream, null);
 
                     switch (incomingMessage["type"])
                     {
                         case "ping":
                             {
-                                await new Message()
+                                await new OldMessage()
                                 {
                                     ["status"] = "pong"
                                 }.Serialize(stream, null);
@@ -205,10 +205,10 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
 
                         case "mail":
                             {
-                                returnLineLogger.Write($"{returnLineLogger.Name}: {JsonSerializer.Serialize(Message.Censor(incomingMessage.ToDictionary()), Message.VisualSerializerOptions)}", ConsoleColor.Gray);
+                                returnLineLogger.Write($"{returnLineLogger.Name}: {JsonSerializer.Serialize(OldMessage.Censor(incomingMessage.ToDictionary()), OldMessage.VisualSerializerOptions)}", ConsoleColor.Gray);
 
-                                Mail mail = JsonSerializer.Deserialize<Mail>(incomingMessage["mail"], Serializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
-                                await new Message()
+                                OldMail mail = JsonSerializer.Deserialize<OldMail>(incomingMessage["mail"], OldSerializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
+                                await new OldMessage()
                                 {
                                     ["status"] = "ok"
                                 }.Serialize(stream, returnLineLogger);
@@ -221,7 +221,7 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
                                         break;
 
                                     case MailType.CacheUpdate:
-                                        Profile newProfile = JsonSerializer.Deserialize<Profile>(mail.Data, Serializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
+                                        Profile newProfile = JsonSerializer.Deserialize<Profile>(mail.Data, OldSerializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
                                         if (profileCache.TryGetValue(senderId, out Profile? oldProfile))
                                         {
                                             returnLineLogger.LogProgress("Received profile update:");
@@ -258,14 +258,14 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
         await commSemaphore.WaitAsync();
         try
         {
-            Message updateProfileRequest = WithAuth(new()
+            OldMessage updateProfileRequest = WithAuth(new()
             {
                 ["intent"] = "update-profile",
-                ["data"] = JsonSerializer.Serialize(profile, Serializer.JsonSerializerOptions),
+                ["data"] = JsonSerializer.Serialize(profile, OldSerializer.JsonSerializerOptions),
             });
             await updateProfileRequest.Serialize(commStream, logger);
 
-            Message updateProfileResponse = await Message.Deserialize(commStream, logger);
+            OldMessage updateProfileResponse = await OldMessage.Deserialize(commStream, logger);
             Profile = updateProfileResponse["status"] switch
             {
                 "ok" => profile,
@@ -279,7 +279,7 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
         }
     }
 
-    private Message WithAuth(Dictionary<string, string> data)
+    private OldMessage WithAuth(Dictionary<string, string> data)
     {
         if (!BootstrapInfo.ClientSecret.IsAuthToken)
             throw new InvalidOperationException("No auth token");
@@ -287,7 +287,7 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
     }
 
 
-    public async Task SendMail(Mail mail)
+    public async Task SendMail(OldMail mail)
     {
         if (commStream is null || commLogger is null)
             throw new InvalidOperationException("Comm stream not initialized");
@@ -295,15 +295,15 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
         await commSemaphore.WaitAsync();
         try
         {
-            Message sendMailRequest = WithAuth(new()
+            OldMessage sendMailRequest = WithAuth(new()
             {
                 ["intent"] = "send-mail",
                 ["recipient"] = Guid.Empty.ToString(),
-                ["mail"] = JsonSerializer.Serialize(mail, Serializer.JsonSerializerOptions)
+                ["mail"] = JsonSerializer.Serialize(mail, OldSerializer.JsonSerializerOptions)
             });
             await sendMailRequest.Serialize(commStream, commLogger);
 
-            Message sendMailResponse = await Message.Deserialize(commStream, commLogger);
+            OldMessage sendMailResponse = await OldMessage.Deserialize(commStream, commLogger);
             switch (sendMailResponse["status"])
             {
                 case "ok":
@@ -333,15 +333,15 @@ public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDispo
         await commSemaphore.WaitAsync();
         try
         {
-            Message request = WithAuth(new()
+            OldMessage request = WithAuth(new()
             {
                 ["intent"] = "get-profile",
                 ["id"] = id.ToString()
             });
             await request.Serialize(commStream, logger);
 
-            Message response = await Message.Deserialize(commStream, logger);
-            Profile profile = JsonSerializer.Deserialize<Profile>(response["profile"], Serializer.JsonSerializerOptions) ?? throw new FaultyDataException("profile");
+            OldMessage response = await OldMessage.Deserialize(commStream, logger);
+            Profile profile = JsonSerializer.Deserialize<Profile>(response["profile"], OldSerializer.JsonSerializerOptions) ?? throw new FaultyDataException("profile");
             profileCache[id] = profile;
             return response["status"] switch
             {

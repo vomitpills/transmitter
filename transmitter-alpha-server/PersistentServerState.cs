@@ -101,13 +101,13 @@ internal sealed partial class PersistentServerState
 
 public class Transaction
 {
-    public Mail Mail { get; }
+    public OldMail Mail { get; }
     public Guid SenderId { get; }
     public Guid TransactionId { get; }
 
-    public Transaction(Mail mail, Guid senderId) : this(mail, senderId, Guid.NewGuid()) { }
+    public Transaction(OldMail mail, Guid senderId) : this(mail, senderId, Guid.NewGuid()) { }
 
-    private Transaction(Mail mail, Guid senderId, Guid transactionId)
+    private Transaction(OldMail mail, Guid senderId, Guid transactionId)
     {
         Mail = mail;
         SenderId = senderId;
@@ -120,7 +120,7 @@ public class Transaction
         stream.Write(TransactionId.ToByteArray());
 
         using BinaryWriter writer = new(stream, Encoding.Default, true);
-        byte[] mail = JsonSerializer.SerializeToUtf8Bytes(Mail, Serializer.JsonSerializerOptions);
+        byte[] mail = JsonSerializer.SerializeToUtf8Bytes(Mail, OldSerializer.JsonSerializerOptions);
         writer.Write((ushort)mail.Length);
         stream.Write(mail);
     }
@@ -138,7 +138,7 @@ public class Transaction
         ushort mailLength = reader.ReadUInt16();
         byte[] mailBuffer = new byte[mailLength];
         stream.ReadExactly(mailBuffer);
-        Mail mail = JsonSerializer.Deserialize<Mail>(mailBuffer, Serializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
+        OldMail mail = JsonSerializer.Deserialize<OldMail>(mailBuffer, OldSerializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
         return new(mail, senderId, transactionId);
     }
 }

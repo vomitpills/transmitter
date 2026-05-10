@@ -32,7 +32,7 @@ public class Profile
 
     public void Serialize(Stream stream)
     {
-        stream.Write(ProtocolMeta.Signature.Span); // change to self versioning
+        stream.Write(OldProtocolMeta.Signature.Span); // change to self versioning
         byte[] nameBuffer = nameEncoding.GetBytes(DisplayName);
         stream.WriteByte((byte)nameBuffer.Length);
         stream.Write(nameBuffer);
@@ -42,7 +42,7 @@ public class Profile
 
     public static Profile Deserialize(Stream stream)
     {
-        ProtocolMeta.ValidateSignature(stream);
+        OldProtocolMeta.ValidateSignature(stream);
         byte nameLength = (byte)stream.ReadByte();
         Span<byte> nameBuffer = stackalloc byte[nameLength];
         stream.ReadExactly(nameBuffer);

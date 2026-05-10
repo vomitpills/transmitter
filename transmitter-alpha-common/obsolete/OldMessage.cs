@@ -7,14 +7,15 @@ using System.Text.Json;
 
 namespace transmitter_alpha_common;
 
-public class Message : IDictionary<string, string>
+[Obsolete]
+public class OldMessage : IDictionary<string, string>
 {
-    public Message()
+    public OldMessage()
     {
 
     }
 
-    public Message(Dictionary<string, string> values)
+    public OldMessage(Dictionary<string, string> values)
     {
         this.values = values;
     }
@@ -31,17 +32,17 @@ public class Message : IDictionary<string, string>
 
     public string this[string key] { get => ((IDictionary<string, string>)values)[key]; set => ((IDictionary<string, string>)values)[key] = value; }
 
-    public static readonly JsonSerializerOptions VisualSerializerOptions = new(Serializer.JsonSerializerOptions) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    public static readonly JsonSerializerOptions VisualSerializerOptions = new(OldSerializer.JsonSerializerOptions) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public async Task Serialize(Stream stream, Logger? logger)
     {
         using Logger.ContextTracker? contextTracker = logger?.LogContext(nameof(Serialize));
-        string json = JsonSerializer.Serialize(values, Serializer.JsonSerializerOptions);
+        string json = JsonSerializer.Serialize(values, OldSerializer.JsonSerializerOptions);
         byte[] data = Encoding.UTF8.GetBytes(json);
 
         contextTracker?.Write(JsonSerializer.Serialize(Censor(values), VisualSerializerOptions));
 
-        await stream.WriteAsync(ProtocolMeta.Signature);
+        await stream.WriteAsync(OldProtocolMeta.Signature);
         using Aes aes = Aes.Create();
         aes.Key = RandomNumberGenerator.GetBytes(32);
         aes.IV = RandomNumberGenerator.GetBytes(16);
@@ -80,13 +81,13 @@ public class Message : IDictionary<string, string>
         return "<withheld>";
     }
 
-    public static async Task<Message> Deserialize(Stream stream, Logger? logger, CancellationToken cancellationToken = default)
+    public static async Task<OldMessage> Deserialize(Stream stream, Logger? logger, CancellationToken cancellationToken = default)
     {
         using Logger.ContextTracker? contextTracker = logger?.LogContext(nameof(Deserialize));
 
-        byte[] signatureBuffer = new byte[ProtocolMeta.Signature.Length];
+        byte[] signatureBuffer = new byte[OldProtocolMeta.Signature.Length];
         await stream.ReadExactlyAsync(signatureBuffer, cancellationToken);
-        if (!ProtocolMeta.Signature.Span.SequenceEqual(signatureBuffer))
+        if (!OldProtocolMeta.Signature.Span.SequenceEqual(signatureBuffer))
             throw new("invalid sig");
 
         using Aes aes = Aes.Create();
@@ -112,7 +113,7 @@ public class Message : IDictionary<string, string>
         if (!hash.SequenceEqual(hashBuffer))
             throw new("invalid hash");
 
-        Dictionary<string, string> values = JsonSerializer.Deserialize<Dictionary<string, string>>(data, Serializer.JsonSerializerOptions) ?? throw new InvalidOperationException("failed to deserialize");
+        Dictionary<string, string> values = JsonSerializer.Deserialize<Dictionary<string, string>>(data, OldSerializer.JsonSerializerOptions) ?? throw new InvalidOperationException("failed to deserialize");
 
         contextTracker?.Write(JsonSerializer.Serialize(Censor(values), VisualSerializerOptions));
 
@@ -175,7 +176,8 @@ public class Message : IDictionary<string, string>
     }
 }
 
-public static class ProtocolMeta
+[Obsolete]
+public static class OldProtocolMeta
 {
     public static ReadOnlyMemory<byte> Signature { get; } = Encoding.ASCII.GetBytes("TRNSMTR-A021"); // make private and expose a Sign(Stream) method
 
