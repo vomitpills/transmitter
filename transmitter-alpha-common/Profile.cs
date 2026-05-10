@@ -33,8 +33,9 @@ public class Profile
     public void Serialize(Stream stream)
     {
         stream.Write(ProtocolMeta.Signature.Span); // change to self versioning
-        stream.WriteByte((byte)DisplayName.Length);
-        stream.Write(nameEncoding.GetBytes(DisplayName));
+        byte[] nameBuffer = nameEncoding.GetBytes(DisplayName);
+        stream.WriteByte((byte)nameBuffer.Length);
+        stream.Write(nameBuffer);
         stream.WriteByte((byte)Color);
         stream.Write(BitConverter.GetBytes(BeepFrequency));
     }

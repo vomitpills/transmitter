@@ -177,7 +177,7 @@ public class Message : IDictionary<string, string>
 
 public static class ProtocolMeta
 {
-    public static ReadOnlyMemory<byte> Signature { get; } = Encoding.ASCII.GetBytes("TRNSMTR-A02"); // make private and expose a Sign(Stream) method
+    public static ReadOnlyMemory<byte> Signature { get; } = Encoding.ASCII.GetBytes("TRNSMTR-A021"); // make private and expose a Sign(Stream) method
 
     public static bool ValidateSignature(Stream stream)
     {
