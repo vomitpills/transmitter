@@ -1,9 +1,9 @@
-﻿using Transmitter.CLI;
+﻿using CLI;
 
-namespace Transmitter.CLI.Visuals;
+namespace CLI.Visuals;
 
 using static ConsoleIO;
-using static Transmitter.CLI.Visuals.Visual;
+using static CLI.Visuals.Visual;
 
 public abstract class OverheadContainer(LayoutSettings layoutSettings, IVisual child) : Container(layoutSettings, child)
 {

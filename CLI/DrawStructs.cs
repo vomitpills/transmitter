@@ -1,7 +1,7 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using Transmitter.CLI.Visuals;
+﻿using CLI.Visuals;
+using System.Diagnostics.CodeAnalysis;
 
-namespace Transmitter.CLI;
+namespace CLI;
 
 public readonly struct Vector2(int x, int y) : IEquatable<Vector2>
 {

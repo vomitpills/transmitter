@@ -1,4 +1,4 @@
-﻿namespace Transmitter.CLI;
+﻿namespace CLI;
 
 public class ControlFlow : BlockingControl
 {

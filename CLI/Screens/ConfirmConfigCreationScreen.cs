@@ -1,7 +1,8 @@
-﻿using System.Net;
-using Transmitter.CLI.Visuals;
+﻿using CLI;
+using CLI.Visuals;
+using System.Net;
 
-namespace Transmitter.CLI.Screens;
+namespace CLI.Screens;
 
 public class ConfirmConfigCreationScreen : Screen
 {

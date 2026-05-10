@@ -1,7 +1,7 @@
-﻿using System.Collections.ObjectModel;
-using Transmitter.CLI;
+﻿using CLI;
+using System.Collections.ObjectModel;
 
-namespace Transmitter.CLI.Visuals;
+namespace CLI.Visuals;
 
 public abstract class Container : Visual
 {

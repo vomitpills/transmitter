@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Transmitter/Transmitter.csproj" />
+  <Project Path="CLI/CLI.csproj" Id="b58bea99-f945-4a25-8348-c82aca772b56" />
   <Project Path="Transmitter.Client/Transmitter.Client.csproj" />
   <Project Path="Transmitter.Server/Transmitter.Server.csproj" />
 </Solution>

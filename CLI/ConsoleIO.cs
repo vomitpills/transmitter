@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
-namespace Transmitter.CLI;
+namespace CLI;
 
 public static class ConsoleIO
 {

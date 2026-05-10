@@ -1,7 +1,7 @@
-﻿using Transmitter.CLI;
-using Transmitter.CLI.Visuals;
+﻿using CLI;
+using CLI.Visuals;
 
-namespace Transmitter.CLI.Screens;
+namespace CLI.Screens;
 
 public class ProfileCustomizeScreen : Screen
 {

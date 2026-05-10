@@ -1,6 +1,6 @@
-﻿using Transmitter.CLI.Visuals;
+﻿using CLI.Visuals;
 
-namespace Transmitter.CLI;
+namespace CLI;
 
 public interface IElement
 {

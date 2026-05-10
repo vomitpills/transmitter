@@ -1,6 +1,7 @@
-﻿namespace Transmitter.CLI.Visuals;
+﻿using CLI;
 
-using Transmitter.CLI;
+namespace CLI.Visuals;
+
 using static ConsoleIO;
 
 public interface IVisual
