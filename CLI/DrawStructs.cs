@@ -67,6 +67,30 @@ public readonly struct SquareNormals(int up, int right, int down, int left) : IE
     public static implicit operator SquareNormals((int Horizontal, int Vertical) factors) => new(factors.Vertical, factors.Horizontal, factors.Vertical, factors.Horizontal);
 }
 
+public class BoxStyle
+{
+    public char NWCorner { get; }
+    public char NECorner { get; }
+    public char SWCorner { get; }
+    public char SECorner { get; }
+    public char Horizontal { get; }
+    public char Vertical { get; }
+
+    private BoxStyle(char nWCorner, char nECorner, char sWCorner, char sECorner, char horizontal, char vertical)
+    {
+        NWCorner = nWCorner;
+        NECorner = nECorner;
+        SWCorner = sWCorner;
+        SECorner = sECorner;
+        Horizontal = horizontal;
+        Vertical = vertical;
+    }
+
+    public static BoxStyle Light { get; } = new('┌', '┐', '└', '┘', '─', '│');
+    public static BoxStyle Heavy { get; } = new('┏', '┓', '┗', '┛', '━', '┃');
+    public static BoxStyle Double { get; } = new('╔', '╗', '╚', '╝', '═', '║');
+}
+
 public readonly struct LayoutSettings
 {
     public VisualAlignment HorizontalAlignment { get; init; }

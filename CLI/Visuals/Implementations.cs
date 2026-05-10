@@ -195,6 +195,8 @@ public class WrapPanel(LayoutSettings layoutSettings, IEnumerable<IVisual> child
 
 public class Box(LayoutSettings layoutSettings, IVisual child) : OverheadContainer(layoutSettings, child)
 {
+    public BoxStyle Style { get; init; } = BoxStyle.Light;
+
     protected override SquareNormals Overhead => new(1 + (title is null ? 0 : 2), 1, 1, 1);
 
     private readonly string? title;
@@ -208,27 +210,27 @@ public class Box(LayoutSettings layoutSettings, IVisual child) : OverheadContain
     {
         int l = 0;
         CursorPosition = boundingBox.Position;
-        DrawLine(boundingBox, ref l, "┌", '─', '┐');
+        DrawLine(boundingBox, ref l, Style.NWCorner, Style.Horizontal, Style.NECorner);
 
         if (title is not null)
         {
-            DrawLine(boundingBox, ref l, "│" + title, ' ', '│');
-            DrawLine(boundingBox, ref l, "├", '─', '┤');
+            DrawLine(boundingBox, ref l, Style.Vertical + title, ' ', Style.Vertical);
+            DrawLine(boundingBox, ref l, '├', Style.Horizontal, '┤');
         }
 
         for (int i = 0; i < boundingBox.Shrink(Overhead).Size.Y; i++)
-            DrawLineTerminals(boundingBox, ref l, '│');
+            DrawLineTerminals(boundingBox, ref l, Style.Vertical);
 
-        DrawLine(boundingBox, ref l, "└", '─', '┘');
+        DrawLine(boundingBox, ref l, Style.SWCorner, Style.Horizontal, Style.SECorner);
     }
 
     private static void MoveCursor(Vector2 anchor, ref int lineNumber) => CursorPosition = anchor + (0, lineNumber++);
 
+    private static void DrawLine(Domain boundingBox, ref int lineNumber, char starter, char filler, char terminator) => DrawLine(boundingBox, ref lineNumber, starter.ToString(), filler, terminator);
     private static void DrawLine(Domain boundingBox, ref int lineNumber, string starter, char filler, char terminator)
     {
         MoveCursor(boundingBox.Position, ref lineNumber);
         Write(starter + new string(filler, boundingBox.Size.X - 1 - starter.Length) + terminator);
-
     }
 
     private static void DrawLineTerminals(Domain boundingBox, ref int lineNumber, char terminal)
