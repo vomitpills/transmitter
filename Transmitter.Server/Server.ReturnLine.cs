@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Transmitter.Authentication;
 
-namespace Transmitter;
+namespace Transmitter.Server;
 
 partial class Server
 {

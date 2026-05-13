@@ -2,7 +2,7 @@
 using System.Text.Json;
 using Transmitter.Authentication;
 
-namespace Transmitter;
+namespace Transmitter.Server;
 
 internal sealed partial class PersistentServerState
 {
@@ -99,46 +99,19 @@ internal sealed partial class PersistentServerState
     public IEnumerable<Guid> EnumerateKnownIds() => Peers.Select(p => p.Id);
 }
 
-public class Transaction
+public class Transaction : ISerializable<Transaction>
 {
-    public OldMail Mail { get; }
+    //public OldMail Mail { get; }
     public Guid SenderId { get; }
     public Guid TransactionId { get; }
 
-    public Transaction(OldMail mail, Guid senderId) : this(mail, senderId, Guid.NewGuid()) { }
-
-    private Transaction(OldMail mail, Guid senderId, Guid transactionId)
+    public static Transaction Deserialize(BinaryReader reader)
     {
-        Mail = mail;
-        SenderId = senderId;
-        TransactionId = transactionId;
+        throw new NotImplementedException();
     }
 
-    public void Serialize(Stream stream)
+    public void Serialize(BinaryWriter writer)
     {
-        stream.Write(SenderId.ToByteArray());
-        stream.Write(TransactionId.ToByteArray());
-
-        using BinaryWriter writer = new(stream, Encoding.Default, true);
-        byte[] mail = JsonSerializer.SerializeToUtf8Bytes(Mail, OldSerializer.JsonSerializerOptions);
-        writer.Write((ushort)mail.Length);
-        stream.Write(mail);
-    }
-
-    public static Transaction Deserialize(Stream stream)
-    {
-        using BinaryReader reader = new(stream, Encoding.Default, true);
-        
-        Span<byte> guidBuffer = stackalloc byte[16];
-        reader.ReadExactly(guidBuffer);
-        Guid senderId = new(guidBuffer);
-        reader.ReadExactly(guidBuffer);
-        Guid transactionId = new(guidBuffer);
-
-        ushort mailLength = reader.ReadUInt16();
-        byte[] mailBuffer = new byte[mailLength];
-        stream.ReadExactly(mailBuffer);
-        OldMail mail = JsonSerializer.Deserialize<OldMail>(mailBuffer, OldSerializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
-        return new(mail, senderId, transactionId);
+        throw new NotImplementedException();
     }
 }

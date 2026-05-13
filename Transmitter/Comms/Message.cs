@@ -2,6 +2,7 @@
 
 public interface IDeserializationKey { }
 
+// this is a rudimentary class kept in case we need to insert some data before the common request/response serialization scheme. might get deleted later.
 public abstract class Message
 {
     protected Message(IDeserializationKey key)
@@ -14,19 +15,11 @@ public abstract class Message
 
     public void Serialize(BinaryWriter writer)
     {
-        // todo: encryption
-        using var _ = Logger.Shared.LogContext(nameof(Serialize), ToString());
-        writer.Write(ProtocolMeta.ProtocolVersionSignature);
         SerializeDescendant(writer);
     }
 
     protected static IDeserializationKey DeserializeRoot(BinaryReader stream)
     {
-        // todo: decryption
-        Span<byte> buffer = stackalloc byte[ProtocolMeta.ProtocolVersionSignatureLength];
-        stream.ReadExactly(buffer);
-        if (!buffer.SequenceEqual(ProtocolMeta.ProtocolVersionSignature))
-            throw new ArgumentOutOfRangeException(nameof(stream), "Protocol version mismatch");
         return new MessageDeserializationKey();
     }
 

@@ -1,8 +1,8 @@
-﻿namespace Transmitter.Comms.Response;
+﻿namespace Transmitter.Comms.Responses;
 
-public sealed class GuidResponse : Response, IResponse
+public sealed class GuidResponse : Response<GuidResponse>, IResponse
 {
-    public override ResponsePayloadType PayloadType => ResponsePayloadType.Guid;
+    public static ResponsePayloadType PayloadType { get; } = ResponsePayloadType.Guid;
 
     public override RequestStatus Status { get; }
 

@@ -11,21 +11,15 @@ public readonly struct ClientSecret : IEquatable<ClientSecret>, ISerializable<Cl
 
     private ClientSecret(ReadOnlyMemory<byte> data) => this.data = data;
 
-    public void Serialize(Stream stream) => stream.Write(data.Span);
-
     public static ClientSecret Emit() => new(RandomNumberGenerator.GetBytes(Length));
 
-    public static ClientSecret Deserialize(Stream stream)
-    {
-        byte[] buffer = new byte[Length];
-        stream.ReadExactly(buffer);
-        return new();
-    }
+    public void Serialize(BinaryWriter writer) => writer.Write(data.Span);
 
-    public bool CompareToHash(ReadOnlyMemory<byte> hash)
+    public static ClientSecret Deserialize(BinaryReader reader)
     {
-        byte[] hashCheck = SHA256.HashData(this.GetBytes());
-        return hash.Span.SequenceEqual(hashCheck);
+        Span<byte> buffer = stackalloc byte[Length];
+        reader.ReadExactly(buffer);
+        return new();
     }
 
     public bool Equals(ClientSecret other) => data.Span.SequenceEqual(other.data.Span);

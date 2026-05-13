@@ -4,10 +4,19 @@ namespace Transmitter.Comms;
 
 internal static class ProtocolMeta
 {
-    public const string PROTOCOL_VERSION = "TRNSMTR-A03";
+    private const string SIGNATURE = "TRNSMTTR";
+    private const ushort PROTOCOL_VERSION = 0;
 
-    public static byte[] ProtocolVersionSignature { get; } = Encoding.UTF8.GetBytes(PROTOCOL_VERSION);
-    public static int ProtocolVersionSignatureLength => ProtocolVersionSignature.Length;
+    private static ReadOnlyMemory<byte> Header { get; } = (byte[])[.. Encoding.ASCII.GetBytes(SIGNATURE), .. BitConverter.GetBytes(PROTOCOL_VERSION)];
+
+    public static void WriteHeader(BinaryWriter writer) => writer.Write(Header.Span);
+    public static void ReadHeader(BinaryReader reader)
+    {
+        Span<byte> headerBuffer = stackalloc byte[Header.Length];
+        reader.ReadExactly(headerBuffer);
+        if (!Header.Span.SequenceEqual(headerBuffer))
+            throw new InvalidDataException("Incompatible header");
+    }
 }
 
 public sealed class ResponseTemplate
@@ -26,9 +35,9 @@ public sealed class ResponseTemplate
         PayloadType = payloadType;
     }
 
-    public static bool IsValidResponse(Request request, Response response)
+    public static bool IsValidResponse<TRequest>(Response response) where TRequest : IRequest
     {
-        foreach (var template in request.ExpectedResponse)
+        foreach (var template in TRequest.ExpectedResponse)
         {
             bool statusPassed = template.RequestStatus is null || template.RequestStatus == response.Status;
             bool payloadPassed = template.PayloadType == response.PayloadType;

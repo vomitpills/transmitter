@@ -2,7 +2,7 @@
 
 namespace Transmitter;
 
-public class Profile
+public class Profile : ISerializable<Profile>
 {
     private static readonly Encoding nameEncoding = Encoding.UTF8;
 
@@ -30,30 +30,29 @@ public class Profile
         BeepFrequency = beepFrequency;
     }
 
-    public void Serialize(Stream stream)
+    public void Serialize(BinaryWriter writer)
     {
-        stream.Write(OldProtocolMeta.Signature.Span); // change to self versioning
+        // add self versioning
         byte[] nameBuffer = nameEncoding.GetBytes(DisplayName);
-        stream.WriteByte((byte)nameBuffer.Length);
-        stream.Write(nameBuffer);
-        stream.WriteByte((byte)Color);
-        stream.Write(BitConverter.GetBytes(BeepFrequency));
+        writer.Write((byte)nameBuffer.Length);
+        writer.Write(nameBuffer);
+        writer.Write((byte)Color);
+        writer.Write(BitConverter.GetBytes(BeepFrequency));
     }
 
-    public static Profile Deserialize(Stream stream)
+    public static Profile Deserialize(BinaryReader reader)
     {
-        OldProtocolMeta.ValidateSignature(stream);
-        byte nameLength = (byte)stream.ReadByte();
+        // add self versioning
+        byte nameLength = reader.ReadByte();
         Span<byte> nameBuffer = stackalloc byte[nameLength];
-        stream.ReadExactly(nameBuffer);
+        reader.ReadExactly(nameBuffer);
         string name = nameEncoding.GetString(nameBuffer);
-        ConsoleColor color = (ConsoleColor)stream.ReadByte();
+        ConsoleColor color = (ConsoleColor)reader.ReadByte();
         if (!UserColors.Contains(color))
-            throw new ArgumentOutOfRangeException(nameof(stream), "Illegal user color");
-        using BinaryReader reader = new(stream, Encoding.Default, true);
+            throw new ArgumentOutOfRangeException(nameof(reader), "Illegal user color");
         int beepFrequency = reader.ReadInt32();
         if (beepFrequency < BeepRange.From || beepFrequency > BeepRange.To)
-            throw new ArgumentOutOfRangeException(nameof(stream), "Illegal beep frequency");
+            throw new ArgumentOutOfRangeException(nameof(reader), "Illegal beep frequency");
         return new(name, color, beepFrequency);
     }
 }

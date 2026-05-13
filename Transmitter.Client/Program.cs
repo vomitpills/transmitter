@@ -1,17 +1,14 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Transmitter.Common;
-using transmitter_common.cli;
-using transmitter_common.cli.Screens;
 
 namespace Transmitter.Client;
 
 internal static class Program
 {
 #if DEBUG
-    private const string CONFIG_NAME = "config-02.debug";
+    private const string CONFIG_NAME = "config-03.debug";
 #else
-    private const string CONFIG_NAME = "config-02";
+    private const string CONFIG_NAME = "config-03";
 #endif
     private static string ConfigFileLocation { get; } = AppConfig.GetFileLocation(CONFIG_NAME);
 
@@ -20,181 +17,11 @@ internal static class Program
 
     public static async Task Main()
     {
-        Console.OutputEncoding = Encoding.Unicode;
-        if (!AppConfig.TryLoad(CONFIG_NAME, out AppConfig? appConfig))
-            appConfig = await SetupAppConfig();
-
-        Client? client = null;
-        while (true)
-        {
-            try
-            {
-                client = new(appConfig.ClientBootstrapInfo, appConfig.Profile);
-                client.BootstrapInfoUpdated += (bootstrapInfo) => appConfig.UpdateBootstrapInfo(bootstrapInfo);
-                await client.Start();
-                break;
-            }
-            catch (Exception e)
-            {
-                client?.Dispose();
-                Logger.LogNote("Failed to connect to server", e.Message, ConsoleColor.Red);
-                Logger.LogNote(null, "Press enter to retry.", ConsoleColor.White);
-                Console.ReadLine();
-            }
-        }
-
-        Logger.EnableInput();
-
-        Task healthCheckTask = client.AwaitAllTasks();
-
-        while (true)
-        {
-            try
-            {
-                if (healthCheckTask.IsFaulted)
-                    throw healthCheckTask.Exception;
-
-                if (Logger.LogInput(Console.ReadKey(true)) is not string message)
-                    continue;
-
-                switch (message)
-                {
-                    case "!setprofile":
-                        Logger.DisableInput();
-                        await client.Pause();
-                        Logger.Reset();
-
-                        Profile? profile = await SetupProfile(client.Profile);
-                        await client.Unpause();
-                        healthCheckTask = client.AwaitAllTasks();
-                        if (profile is not null)
-                        {
-                            await client.UpdateProfile(profile);
-                            appConfig.UpdateProfile(profile);
-                        }
-
-                        Logger.EnableInput();
-                        break;
-
-                    case "!togglesound":
-                        Logger.LogNote(null, $"Switched sound to {(Logger.ToggleSound()? "ON" : "OFF")} (will reset on app restart)", ConsoleColor.Cyan);
-                        break;
-
-                    default:
-                        OldMail mail = new(MailType.Message, message);
-                        await client.SendMail(mail);
-                        Logger.LogMessage(client.Profile, message, false);
-                        break;
-                }
-            }
-            catch (Exception e)
-            {
-                Logger.DisableInput();
-                Logger recoveryLogger = new("recovery", ConsoleColor.Red);
-                recoveryLogger.Write(string.Empty);
-                recoveryLogger.LogProgress("Lost connection; previous action aborted");
-                int i = RECONNECT_ATTEMPTS;
-                for (; i > 0; i--)
-                {
-                    recoveryLogger.LogProgress($"Attempting to reconnect ({i}/{RECONNECT_ATTEMPTS})");
-                    await client.Stop();
-                    try
-                    {
-                        await client.Start();
-                        healthCheckTask = client.AwaitAllTasks();
-                        break;
-                    }
-                    catch
-                    {
-                        if (i is 0)
-                            continue;
-                        recoveryLogger.LogProgress($"Failed to reconnect. Sleeping {reconnectInterval.TotalSeconds}s before next attempt");
-                        await Task.Delay(reconnectInterval);
-                    }
-                }
-                if (i is 0)
-                {
-                    recoveryLogger.Write(string.Empty);
-                    recoveryLogger.LogProgress("Recconection attempts exhausted, exiting");
-                    recoveryLogger.Write(string.Empty);
-                    Logger.LogNote("Cause of crash", e.ToString(), ConsoleColor.Red);
-                    Logger.LogNote(null, "You can now close the program", ConsoleColor.Red);
-                    await Task.Delay(Timeout.Infinite);
-                }
-                else
-                {
-                    recoveryLogger.LogProgress("Reconnected");
-                    Logger.EnableInput();
-                }
-            }
-        }
-    }
-
-    private static async Task<AppConfig> SetupAppConfig()
-    {
-        ClientBootstrapInfo clientBootstrapInfo;
-        Profile? profile;
-        while (true)
-        {
-            Console.WriteLine("no config found, setting up a new one.");
-            Console.WriteLine("enter bootstrap code:");
-            Console.Write("╰→ ");
-            string code = Console.ReadLine() ?? throw new InvalidOperationException();
-
-            try
-            {
-                clientBootstrapInfo = ClientBootstrapInfo.Decode(code);
-                if (clientBootstrapInfo.ClientSecret.IsAuthToken)
-                    throw new InvalidOperationException("Can't bootstrap with an auth token");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("error:");
-                Console.WriteLine(e);
-                continue;
-            }
-
-            ConsoleIO.Initialize();
-
-            ConfirmConfigCreationScreen confirmScreen = new(clientBootstrapInfo.ServerAddress, ConfigFileLocation);
-            confirmScreen.EnableInput();
-            do
-            {
-                ConsoleIO.ShowScreen(confirmScreen);
-                await confirmScreen.WaitForInvalidationAsync();
-            } while (confirmScreen.Status is null);
-            confirmScreen.DisableInput();
-
-            ConsoleIO.Reset();
-
-            if (confirmScreen.Status is true)
-            {
-                if ((profile = await SetupProfile()) is not null)
-                    break;
-            }
-        }
-        return AppConfig.CreateNew(CONFIG_NAME, clientBootstrapInfo, profile);
-    }
-
-    private static async Task<Profile?> SetupProfile(Profile? oldProfile = null)
-    {
-        ConsoleIO.Initialize();
-
-        ProfileCustomizeScreen profileCustomizeScreen = new(oldProfile);
-        profileCustomizeScreen.EnableInput();
-        do
-        {
-            ConsoleIO.ShowScreen(profileCustomizeScreen);
-            await profileCustomizeScreen.WaitForInvalidationAsync();
-        } while (profileCustomizeScreen.Status is null);
-        profileCustomizeScreen.DisableInput();
-
-        ConsoleIO.Reset();
-
-        return profileCustomizeScreen.Profile!;
+        throw new NotImplementedException();
     }
 }
 
+[Obsolete]
 internal class AppConfig : IDisposable
 {
     private static string ConfigFileDirectory { get; } = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "transmitter");
@@ -241,8 +68,8 @@ internal class AppConfig : IDisposable
             using BinaryReader reader = new(stream, Encoding.Default, true);
             if (reader.ReadUInt16() != CONFIG_FORMAT_VERSION)
                 throw new InvalidOperationException("Config format version mismatch");
-            ClientBootstrapInfo clientBootstrapInfo = ClientBootstrapInfo.Deserialize(stream);
-            Profile profile = Profile.Deserialize(stream);
+            ClientBootstrapInfo clientBootstrapInfo = default;
+            Profile profile = Profile.Deserialize(reader);
             config = new(stream, clientBootstrapInfo, profile);
             return true;
         }
@@ -273,10 +100,10 @@ internal class AppConfig : IDisposable
 
     public void Save() // create backup before writing
     {
+        using BinaryWriter writer = new(storageStream, Encoding.Default, true);
         storageStream.SetLength(0);
         storageStream.Write(BitConverter.GetBytes(CONFIG_FORMAT_VERSION));
-        ClientBootstrapInfo.Serialize(storageStream);
-        Profile.Serialize(storageStream);
+        Profile.Serialize(writer);
         storageStream.Flush();
     }
 

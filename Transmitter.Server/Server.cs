@@ -2,11 +2,11 @@
 using Transmitter;
 using Transmitter.Authentication;
 
-namespace Transmitter;
+namespace Transmitter.Server;
 
 public partial class Server : IDisposable
 {
-    private static readonly TimeSpan AccessCodeExpirationTime = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan AccessCodeExpirationTime = TimeSpan.FromSeconds(15);
 
     private readonly PersistentServerState persistentState = PersistentServerState.LoadOrCreate(Path.Join(Environment.CurrentDirectory, "state"));
     private readonly Dictionary<ReturnLineAccessCode, DateTimeOffset> returnLineAccessCodes = [];

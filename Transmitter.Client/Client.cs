@@ -1,365 +1,110 @@
-﻿using System.Net.Sockets;
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
-using transmitter_common;
+using Transmitter.Authentication;
+using Transmitter.Comms;
+using Transmitter.Comms.Gateways;
+using Transmitter.Comms.Requests;
+using Transmitter.Comms.Responses;
 
 namespace Transmitter.Client;
 
-public class Client(ClientBootstrapInfo bootstrapInfo, Profile profile) : IDisposable
+public class Client : Transceiver
 {
-    public Profile Profile { get; private set; } = profile;
-    private TcpClient? commClient;
-    private TcpClient? returnLineClient;
-
-    private readonly SemaphoreSlim commSemaphore = new(1);
-
+    public Profile Profile { get; private set; }
     private readonly Dictionary<Guid, Profile> profileCache = [];
 
-    private ClientBootstrapInfo BootstrapInfo
+    readonly TcpGateway gateway = new(new(IPAddress.Any, 0));
+
+    public Client(Profile profile, IReadOnlyDictionary<Guid, Profile>? profileCache = null)
     {
-        get;
-        set
-        {
-            field = value;
-            BootstrapInfoUpdated?.Invoke(value);
-        }
-    } = bootstrapInfo;
+        Profile = profile;
+        if (profileCache is not null)
+            this.profileCache = new(profileCache);
+        gateway.Start();
+    }
 
-    public event Action<ClientBootstrapInfo>? BootstrapInfoUpdated;
-
-    private Task? returnLineChannelTask;
-
-    private Stream? commStream;
-    private Logger? commLogger;
-
-    public async Task Start()
+    public async Task<IChat> ConnectToInstance(IPAddress address, ushort port, ushort returnLinePort, Guid inviteCode)
     {
-        commClient = new();
-        commLogger = new("client-comm");
-        await commClient.ConnectAsync(new(BootstrapInfo.ServerAddress, BootstrapInfo.CommPort));
-        commStream = commClient.GetStream();
-        commLogger.LogProgress("Connected comm socket");
+        Connection connection = await EstablishInstanceConnection(new(address, port), Role.Client);
+        ClientSecret clientSecret = await ObtainClientSecret(connection, inviteCode);
+        return await ConnectToInstance(connection, new(address, returnLinePort), clientSecret);
+    }
+    public async Task<IChat> ConnectToInstance(IPAddress address, ushort port, ushort returnLinePort, ClientSecret clientSecret)
+    {
+        Connection connection = await EstablishInstanceConnection(new(address, port), Role.Client);
+        return await ConnectToInstance(connection, new(address, returnLinePort), clientSecret);
+    }
 
-        await EnsureClientSecret(commStream, commLogger);
-        await Connect(commStream, commLogger);
+    private async Task<Chat> ConnectToInstance(Connection connection, IPEndPoint returnLineEndpoint, ClientSecret clientSecret)
+    {
+        Guid returnLineKey = await GetReturnLineKey(connection, clientSecret);
+        Connection returnLineConnection = await EstablishInstanceConnection(returnLineEndpoint, Role.Server);
+        await AuthenticateReturnLine(returnLineConnection, clientSecret, returnLineKey);
+        return new(connection, returnLineConnection);
+    }
 
-        _ = Task.Run(async() =>
+    private static async Task<ClientSecret> ObtainClientSecret(Connection connection, Guid inviteCode)
+    {
+        Response response = await connection.RequestAsync(new ObtainClientSecretRequest(inviteCode), (payloadType) => payloadType switch
         {
-            while (commClient.Connected)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(30));
-                await SendKeepAlive(commStream);
-            }
+            ResponsePayloadType.ClientSecret => ClientSecretResponse.FinalizeDeserialization, // make the request class implement this
+            _ => throw new ArgumentOutOfRangeException(nameof(payloadType))
         });
-    }
-
-    public async Task AwaitAllTasks(CancellationToken cancellationToken = default)
-    {
-        if (returnLineChannelTask is not null)
-            await returnLineChannelTask.WaitAsync(cancellationToken);
-    }
-
-    public async Task Stop()
-    {
-        commClient?.Dispose();
-        commClient = null;
-        returnLineClient?.Dispose();
-        returnLineClient = null;
-    }
-
-    public async Task Pause()
-    {
-        await Stop();
-    }
-
-    public async Task Unpause()
-    {
-        await Start();
-    }
-
-    private async Task SendKeepAlive(Stream stream)
-    {
-        if (commSemaphore.CurrentCount is 0)
-            return;
-
-        commSemaphore.Wait();
-        try
+        return response switch
         {
-            OldMessage keepAliveRequest = WithAuth(new()
-            {
-                ["intent"] = "ping"
-            });
-            await keepAliveRequest.Serialize(stream, null);
-
-            OldMessage keepAliveResponse = await OldMessage.Deserialize(stream, null);
-
-            switch (keepAliveResponse["status"])
-            {
-                case "pong":
-                    break;
-                case "err":
-                    throw CommonException.Deserialize(keepAliveResponse["cause"]);
-                default:
-                    throw new MessageStructureException("status");
-            }
-        }
-        finally
-        {
-            commSemaphore.Release();
-        }
-    }
-
-    private async Task EnsureClientSecret(Stream stream, Logger logger)
-    {
-        if (BootstrapInfo.ClientSecret.IsAuthToken)
-            return;
-
-        Request registerRequest = new()
-        {
-            ["intent"] = "register",
-            ["invite-code"] = BootstrapInfo.ClientSecret.Encode()
+            ClientSecretResponse clientSecretResponse => clientSecretResponse.ClientSecret,
+            _ => throw new NotImplementedException()
         };
-        await registerRequest.Serialize(stream, logger);
-
-        OldMessage getIdResponse = await OldMessage.Deserialize(stream, logger);
-        BootstrapInfo = getIdResponse["status"] switch
-        {
-            "ok" => BootstrapInfo with { ClientSecret = ClientSecret.Decode(getIdResponse["secret"]) },
-            "err" => throw CommonException.Deserialize(getIdResponse["cause"]),
-            _ => throw new MessageStructureException("status")
-        };
-        logger.LogProgress("Obtained auth token");
     }
 
-    private async Task Connect(Stream stream, Logger logger, bool allowRecursion = true)
+    private static async Task AuthenticateReturnLine(Connection returnLineConnection, ClientSecret clientSecret, Guid returnLineKey)
     {
-        OldMessage checkInRequest = WithAuth(new()
+        Response response = await returnLineConnection.RequestAsync(new AuthenticateReturnLineRequest(clientSecret, returnLineKey), (payloadType) => payloadType switch
         {
-            ["intent"] = "check-in"
+            ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
+            _ => throw new ArgumentOutOfRangeException(nameof(payloadType))
         });
-        await checkInRequest.Serialize(stream, logger);
-
-        OldMessage checkInResponse = await OldMessage.Deserialize(stream, logger);
-        switch (checkInResponse["status"])
-        {
-            case "ok":
-                logger.LogProgress("Checked in");
-                string key = checkInResponse["key"];
-                await ConnectReturnLineStream(key);
-                break;
-
-            case "err":
-                CommonException exception = CommonException.Deserialize(checkInResponse["cause"]);
-                if (!allowRecursion || exception.Specifier is not "state" || exception.Fault is not "no-profile")
-                    throw exception;
-                await UpdateProfile(Profile, logger);
-                await Connect(stream, logger, false);
-                break;
-
-            default:
-                throw new MessageStructureException("status");
-        }
+        if (response.Status is not RequestStatus.OK)
+            throw new NotImplementedException();
     }
 
-    private async Task ConnectReturnLineStream(string key)
+    private static async Task<Guid> GetReturnLineKey(Connection connection, ClientSecret clientSecret)
     {
-        if (returnLineChannelTask is not null)
-            throw new InvalidOperationException("already connected");
-
-        Logger returnLineLogger = new("client-returnline");
-
-        returnLineClient = new();
-        await returnLineClient.ConnectAsync(new(BootstrapInfo.ServerAddress, BootstrapInfo.ReturnLinePort));
-        Stream stream = returnLineClient.GetStream();
-        returnLineLogger.LogProgress("Connected returnline socket");
-
-        OldMessage checkInRequest = WithAuth(new()
+        Response response = await connection.RequestAsync(new ObtainReturnLineKeyRequest(clientSecret), (payloadType) => payloadType switch
         {
-            ["intent"] = "check-in",
-            ["key"] = key
+            ResponsePayloadType.Guid => GuidResponse.FinalizeDeserialization,
+            ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
+            _ => throw new ArgumentOutOfRangeException(nameof(payloadType))
         });
-        await checkInRequest.Serialize(stream, returnLineLogger);
-
-        OldMessage response = await OldMessage.Deserialize(stream, returnLineLogger);
-        if (response["status"] is not "ok")
-            throw new InvalidOperationException();
-
-        returnLineLogger.LogProgress("Authorized");
-
-        returnLineChannelTask = Task.Run(async () =>
-        {
-            try
-            {
-                while (returnLineClient.Connected)
-                {
-                    OldMessage incomingMessage = await OldMessage.Deserialize(stream, null);
-
-                    switch (incomingMessage["type"])
-                    {
-                        case "ping":
-                            {
-                                await new OldMessage()
-                                {
-                                    ["status"] = "pong"
-                                }.Serialize(stream, null);
-                                break;
-                            }
-
-                        case "mail":
-                            {
-                                returnLineLogger.Write($"{returnLineLogger.Name}: {JsonSerializer.Serialize(OldMessage.Censor(incomingMessage.ToDictionary()), OldMessage.VisualSerializerOptions)}", ConsoleColor.Gray);
-
-                                OldMail mail = JsonSerializer.Deserialize<OldMail>(incomingMessage["mail"], OldSerializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
-                                await new OldMessage()
-                                {
-                                    ["status"] = "ok"
-                                }.Serialize(stream, returnLineLogger);
-
-                                Guid senderId = Guid.Parse(incomingMessage["from"]);
-                                switch (mail.MailType)
-                                {
-                                    case MailType.Message:
-                                        Logger.LogMessage(await GetProfile(senderId, returnLineLogger), mail.Data);
-                                        break;
-
-                                    case MailType.CacheUpdate:
-                                        Profile newProfile = JsonSerializer.Deserialize<Profile>(mail.Data, OldSerializer.JsonSerializerOptions) ?? throw new InvalidOperationException();
-                                        if (profileCache.TryGetValue(senderId, out Profile? oldProfile))
-                                        {
-                                            returnLineLogger.LogProgress("Received profile update:");
-                                            Logger.LogProfileUpdate(oldProfile, newProfile);
-                                        }
-                                        profileCache[senderId] = newProfile;
-                                        break;
-
-                                    default:
-                                        throw new NotImplementedException();
-                                }
-                                break;
-                            }
-
-                        default:
-                            throw new InvalidOperationException();
-                    }
-                }
-            }
-            finally
-            {
-                returnLineChannelTask = null;
-            }
-        });
+        if (response is not GuidResponse guidResponse)
+            throw new NotImplementedException();
+        return guidResponse.Guid;
     }
 
-    public Task UpdateProfile(Profile profile) => UpdateProfile(profile, commLogger!);
-
-    private async Task UpdateProfile(Profile profile, Logger logger)
+    private class Chat(Connection connection, Connection returnLineConnection) : IChat
     {
-        if (commStream is null)
-            throw new InvalidOperationException();
+        public event Func<Mail>? MailReceived;
 
-        await commSemaphore.WaitAsync();
-        try
+        public Task PostMail(Mail mail)
         {
-            OldMessage updateProfileRequest = WithAuth(new()
-            {
-                ["intent"] = "update-profile",
-                ["data"] = JsonSerializer.Serialize(profile, OldSerializer.JsonSerializerOptions),
-            });
-            await updateProfileRequest.Serialize(commStream, logger);
-
-            OldMessage updateProfileResponse = await OldMessage.Deserialize(commStream, logger);
-            Profile = updateProfileResponse["status"] switch
-            {
-                "ok" => profile,
-                "err" => throw CommonException.Deserialize(updateProfileResponse["cause"]),
-                _ => throw new MessageStructureException("status"),
-            };
+            throw new NotImplementedException();
         }
-        finally
+
+        public void Dispose()
         {
-            commSemaphore.Release();
+            connection.Dispose();
+            returnLineConnection.Dispose();
         }
     }
 
-    private OldMessage WithAuth(Dictionary<string, string> data)
-    {
-        if (!BootstrapInfo.ClientSecret.IsAuthToken)
-            throw new InvalidOperationException("No auth token");
-        return [.. data.Append(new("auth", BootstrapInfo.ClientSecret.Encode()))];
-    }
+    private async Task<Connection> EstablishInstanceConnection(IPEndPoint endpoint, Role role) => await ConnectAsync(() => gateway.InitiateConnectionAsync(endpoint, new(role, 60)));
+}
 
-    public async Task SendMail(OldMail mail)
-    {
-        if (commStream is null || commLogger is null)
-            throw new InvalidOperationException("Comm stream not initialized");
-
-        await commSemaphore.WaitAsync();
-        try
-        {
-            OldMessage sendMailRequest = WithAuth(new()
-            {
-                ["intent"] = "send-mail",
-                ["recipient"] = Guid.Empty.ToString(),
-                ["mail"] = JsonSerializer.Serialize(mail, OldSerializer.JsonSerializerOptions)
-            });
-            await sendMailRequest.Serialize(commStream, commLogger);
-
-            OldMessage sendMailResponse = await OldMessage.Deserialize(commStream, commLogger);
-            switch (sendMailResponse["status"])
-            {
-                case "ok":
-                    break;
-                case "cached":
-                    throw new NotImplementedException();
-                case "err":
-                    throw CommonException.Deserialize(sendMailResponse["cause"]);
-                default:
-                    throw new MessageStructureException("status");
-            }
-        }
-        finally
-        {
-            commSemaphore.Release();
-        }
-    }
-
-    private async Task<Profile> GetProfile(Guid id, Logger logger)
-    {
-        if (commStream is null)
-            throw new InvalidOperationException();
-
-        if (profileCache.TryGetValue(id, out Profile? cached))
-            return cached;
-
-        await commSemaphore.WaitAsync();
-        try
-        {
-            OldMessage request = WithAuth(new()
-            {
-                ["intent"] = "get-profile",
-                ["id"] = id.ToString()
-            });
-            await request.Serialize(commStream, logger);
-
-            OldMessage response = await OldMessage.Deserialize(commStream, logger);
-            Profile profile = JsonSerializer.Deserialize<Profile>(response["profile"], OldSerializer.JsonSerializerOptions) ?? throw new FaultyDataException("profile");
-            profileCache[id] = profile;
-            return response["status"] switch
-            {
-                "ok" => profile,
-                "err" => throw CommonException.Deserialize(response["cause"]),
-                _ => throw new MessageStructureException("status")
-            };
-        }
-        finally
-        {
-            commSemaphore.Release();
-        }
-    }
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-        commClient?.Dispose();
-        returnLineClient?.Dispose();
-    }
+public interface IChat : IDisposable
+{
+    public event Func<Mail>? MailReceived;
+    public Task PostMail(Mail mail);
 }

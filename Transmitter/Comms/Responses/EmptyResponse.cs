@@ -1,8 +1,8 @@
-﻿namespace Transmitter.Comms.Response;
+﻿namespace Transmitter.Comms.Responses;
 
-public sealed class EmptyResponse : Response, IResponse
+public sealed class EmptyResponse : Response<EmptyResponse>, IResponse
 {
-    public override ResponsePayloadType PayloadType => ResponsePayloadType.Empty;
+    public static ResponsePayloadType PayloadType => ResponsePayloadType.Empty;
 
     public override RequestStatus Status { get; }
 

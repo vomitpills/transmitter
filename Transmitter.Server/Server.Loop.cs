@@ -4,7 +4,7 @@ using System.Text.Json;
 using Transmitter;
 using Transmitter.Authentication;
 
-namespace Transmitter;
+namespace Transmitter.Server;
 
 partial class Server
 {

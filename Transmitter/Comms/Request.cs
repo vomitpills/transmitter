@@ -1,12 +1,12 @@
 ﻿using System.Collections.ObjectModel;
-using Transmitter;
 
 namespace Transmitter.Comms;
 
 public interface IRequest
 {
-    protected abstract static Request FinalizeDeserialization(BinaryReader stream, RequestIntention intention, IDeserializationKey key);
     public abstract static ReadOnlyCollection<ResponseTemplate> ExpectedResponse { get; }
+    public abstract static Request FinalizeDeserialization(BinaryReader stream, RequestIntention intention, IDeserializationKey key);
+    public static abstract RequestIntention Intention { get; }
 }
 
 // add challenge (e.g. sum two bytes from payload)
@@ -14,23 +14,16 @@ public interface IRequest
 public enum RequestIntention : byte
 {
     ObtainSecret,
-    InitialConnect,
-    ConnectReturnLine
+    Authenticate
 }
 
-public abstract class Request : Message
+public abstract class Request : Message // this is atrocious
 {
-    public abstract RequestIntention Intention { get; }
+    protected Request(IDeserializationKey key) : base(key) { }
 
-    protected Request(IDeserializationKey key, RequestIntention intention) : base(key)
-    {
-        if (intention != Intention)
-            throw new ArgumentOutOfRangeException(nameof(intention), "Intention mismatch");
-    }
+    protected Request() { }
 
-    protected Request() : base() { }
-
-    public static Request BeginDeserialization(BinaryReader stream, Func<RequestIntention, Func<BinaryReader, RequestIntention, IDeserializationKey, Request>> deserializeFinishChooser)
+    public static Request BeginDeserialization(BinaryReader stream, Func<RequestIntention, RequestDeserializationFinalizer> finalizeFactory)
     {
         using var _ = Logger.Shared.LogContext(nameof(BeginDeserialization));
         IDeserializationKey key = DeserializeRoot(stream);
@@ -39,14 +32,26 @@ public abstract class Request : Message
         if (!Enum.IsDefined(intention))
             throw new ArgumentOutOfRangeException(nameof(stream), $"'{intention}' is not defined for {nameof(RequestIntention)}");
 
-        return deserializeFinishChooser(intention)(stream, intention, key);
+        return finalizeFactory(intention)(stream, intention, key);
+    }
+}
+
+public abstract class Request<T> : Request where T : IRequest
+{
+    protected Request(IDeserializationKey key, RequestIntention intention) : base(key)
+    {
+        if (intention != T.Intention)
+            throw new ArgumentOutOfRangeException(nameof(intention), "Intention mismatch");
     }
 
-    protected override void SerializeDescendant(BinaryWriter writer)
+    protected Request() : base() { }
+
+    protected sealed override void SerializeDescendant(BinaryWriter writer)
     {
-        writer.Write((byte)Intention);
+        writer.Write((byte)T.Intention);
         FinalizeSerialization(writer);
     }
-
     protected abstract void FinalizeSerialization(BinaryWriter writer);
 }
+
+public delegate Request RequestDeserializationFinalizer(BinaryReader reader, RequestIntention intention, IDeserializationKey key);

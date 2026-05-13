@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using Transmitter.Authentication;
 
-namespace Transmitter;
+namespace Transmitter.Server;
 
 partial class PersistentServerState : IDisposable
 {
