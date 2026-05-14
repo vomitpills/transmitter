@@ -1,16 +1,15 @@
-﻿using System.Collections.ObjectModel;
-using Transmitter.Authentication;
+﻿using Transmitter.Authentication;
 
 namespace Transmitter.Comms;
 
 public interface IAuthenticatedRequest : IRequest
 {
     public abstract static Request FinalizeDescendantDeserialization(BinaryReader reader, RequestIntention intention, ClientSecret clientSecret, IDeserializationKey key);
+    public abstract static ResponseDeserializationFinalizer FinalizeDescendantResponseDeserialization(ResponsePayloadType responsePayloadType);
 }
 
 public abstract class AuthenticatedRequest<T> : Request<T>, IRequest where T : Request<T>, IAuthenticatedRequest
 {
-    public static ReadOnlyCollection<ResponseTemplate> ExpectedResponse => T.ExpectedResponse;
     public static RequestIntention Intention => T.Intention;
 
     private ClientSecret ClientSecret { get; }
@@ -37,4 +36,6 @@ public abstract class AuthenticatedRequest<T> : Request<T>, IRequest where T : R
         FinalizeDescendantSerialization(writer);
     }
     protected abstract void FinalizeDescendantSerialization(BinaryWriter writer);
+
+    public static ResponseDeserializationFinalizer FinalizeResponseDeserialization(ResponsePayloadType responsePayloadType) => T.FinalizeDescendantResponseDeserialization(responsePayloadType);
 }

@@ -1,6 +1,4 @@
-﻿using System.Net.NetworkInformation;
-
-namespace Transmitter.Comms;
+﻿namespace Transmitter.Comms;
 
 public interface IResponse
 {

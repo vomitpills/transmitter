@@ -1,6 +1,4 @@
-﻿using CLI;
-
-namespace CLI.Visuals;
+﻿namespace CLI.Visuals;
 
 using static ConsoleIO;
 

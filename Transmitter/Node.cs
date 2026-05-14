@@ -1,13 +1,12 @@
 ﻿using System.Net;
-using System.Text;
+
+using Transmitter.Comms.Gateways;
 
 namespace Transmitter;
 
-public sealed class Node : Transceiver
+public abstract class Node : Transceiver
 {
     private readonly List<(IPEndPoint, Guid)> instances = [];
-
-    public override Logger Logger => new(nameof(Node));
 
     public async Task<bool> AddInstance(IPEndPoint endPoint)
     {

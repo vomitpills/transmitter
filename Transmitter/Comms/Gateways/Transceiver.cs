@@ -1,7 +1,4 @@
-﻿using System.Reflection.PortableExecutable;
-using System.Threading.Channels;
-
-namespace Transmitter.Comms.Gateways;
+﻿namespace Transmitter.Comms.Gateways;
 
 public abstract class Transceiver(Predicate<ConnectionOptions>? connectionFilter = null)
 {
@@ -11,13 +8,13 @@ public abstract class Transceiver(Predicate<ConnectionOptions>? connectionFilter
     private readonly Dictionary<Guid, BinaryWriter> OutgoingTerminals = [];
     #endregion
 
-    protected event Action<Connection>? NewConnection;
+    protected event Action<QAConnection>? NewConnection;
 
-    protected async Task<Connection> ConnectAsync(Func<Task> sendTask, CancellationToken cancellationToken = default)
+    protected async Task<QAConnection> ConnectAsync(Func<Task> sendTask, CancellationToken cancellationToken = default)
     {
-        TaskCompletionSource<Connection> completionSource = new();
+        TaskCompletionSource<QAConnection> completionSource = new();
 
-        void Callback(Connection connection)
+        void Callback(QAConnection connection)
         {
             NewConnection -= Callback;
             completionSource.TrySetResult(connection);

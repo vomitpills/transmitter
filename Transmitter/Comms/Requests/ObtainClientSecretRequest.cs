@@ -1,11 +1,10 @@
-﻿using System.Collections.ObjectModel;
+﻿using Transmitter.Comms.Responses;
 
 namespace Transmitter.Comms.Requests;
 
 public sealed class ObtainClientSecretRequest : Request<ObtainClientSecretRequest>, IRequest
 {
     public static RequestIntention Intention => RequestIntention.ObtainSecret;
-    public static ReadOnlyCollection<ResponseTemplate> ExpectedResponse { get; } = [new(ResponsePayloadType.ClientSecret)];
 
     public Guid InviteCode { get; }
 
@@ -31,4 +30,11 @@ public sealed class ObtainClientSecretRequest : Request<ObtainClientSecretReques
     {
         writer.Write(InviteCode.ToByteArray());
     }
+
+    static ResponseDeserializationFinalizer IRequest.FinalizeResponseDeserialization(ResponsePayloadType responsePayloadType) => responsePayloadType switch
+    {
+        ResponsePayloadType.ClientSecret => ClientSecretResponse.FinalizeDeserialization,
+        ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
+        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType))
+    };
 }

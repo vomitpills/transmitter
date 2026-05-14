@@ -1,6 +1,6 @@
-﻿using CLI;
+﻿using System.Net;
+
 using CLI.Visuals;
-using System.Net;
 
 namespace CLI.Screens;
 

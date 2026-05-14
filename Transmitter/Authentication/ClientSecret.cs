@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
-using Transmitter;
 
 namespace Transmitter.Authentication;
 

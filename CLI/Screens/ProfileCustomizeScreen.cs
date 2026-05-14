@@ -1,5 +1,4 @@
-﻿using CLI;
-using CLI.Visuals;
+﻿using CLI.Visuals;
 
 namespace CLI.Screens;
 

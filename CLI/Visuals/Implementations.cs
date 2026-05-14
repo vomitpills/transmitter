@@ -1,9 +1,7 @@
-﻿using CLI;
+﻿namespace CLI.Visuals;
 
-namespace CLI.Visuals;
-
-using static ConsoleIO;
 using static CLI.Visuals.Visual;
+using static ConsoleIO;
 
 public abstract class OverheadContainer(LayoutSettings layoutSettings, IVisual child) : Container(layoutSettings, child)
 {

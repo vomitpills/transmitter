@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
-using Transmitter;
+
 using Transmitter.Authentication;
+using Transmitter.Comms;
 
 namespace Transmitter.Server;
 

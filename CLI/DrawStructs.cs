@@ -1,5 +1,6 @@
-﻿using CLI.Visuals;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
+
+using CLI.Visuals;
 
 namespace CLI;
 

@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
+using Transmitter.Comms;
+
 namespace Transmitter.Client;
 
 internal static class Program

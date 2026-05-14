@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Transmitter;
+namespace Transmitter.Comms;
 
 public class Profile : ISerializable<Profile>
 {

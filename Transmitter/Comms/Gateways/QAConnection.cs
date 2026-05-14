@@ -1,21 +1,8 @@
-﻿using System.Text;
-using Transmitter.Comms.Requests;
+﻿namespace Transmitter.Comms.Gateways;
 
-namespace Transmitter.Comms.Gateways;
-
-public sealed class Connection : IDisposable // add keepalive packet logic
+public sealed class QAConnection(ConnectionOptions connectionOptions, BinaryWriter writer, BinaryReader reader) : IDisposable // add keepalive packet logic
 {
-    private readonly BinaryWriter writer;
-    private readonly BinaryReader reader;
-
-    public Connection(ConnectionOptions connectionOptions, BinaryWriter writer, BinaryReader reader)
-    {
-        this.writer = writer;
-        this.reader = reader;
-        ConnectionOptions = connectionOptions;
-    }
-
-    public ConnectionOptions ConnectionOptions { get; }
+    public ConnectionOptions ConnectionOptions { get; } = connectionOptions;
 
     public async Task<Response> RequestAsync(Request request, Func<ResponsePayloadType, ResponseDeserializationFinalizer> finalizerChooser, CancellationToken cancellationToken = default)
     {

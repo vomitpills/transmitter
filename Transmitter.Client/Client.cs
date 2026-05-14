@@ -1,8 +1,5 @@
-﻿using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
-using System.Net;
-using System.Net.Sockets;
-using System.Text.Json;
+﻿using System.Net;
+
 using Transmitter.Authentication;
 using Transmitter.Comms;
 using Transmitter.Comms.Gateways;
@@ -28,25 +25,25 @@ public class Client : Transceiver
 
     public async Task<IChat> ConnectToInstance(IPAddress address, ushort port, ushort returnLinePort, Guid inviteCode)
     {
-        Connection connection = await EstablishInstanceConnection(new(address, port), Role.Client);
+        QAConnection connection = await EstablishInstanceConnection(new(address, port), Role.Client);
         ClientSecret clientSecret = await ObtainClientSecret(connection, inviteCode);
         return await ConnectToInstance(connection, new(address, returnLinePort), clientSecret);
     }
     public async Task<IChat> ConnectToInstance(IPAddress address, ushort port, ushort returnLinePort, ClientSecret clientSecret)
     {
-        Connection connection = await EstablishInstanceConnection(new(address, port), Role.Client);
+        QAConnection connection = await EstablishInstanceConnection(new(address, port), Role.Client);
         return await ConnectToInstance(connection, new(address, returnLinePort), clientSecret);
     }
 
-    private async Task<Chat> ConnectToInstance(Connection connection, IPEndPoint returnLineEndpoint, ClientSecret clientSecret)
+    private async Task<Chat> ConnectToInstance(QAConnection connection, IPEndPoint returnLineEndpoint, ClientSecret clientSecret)
     {
         Guid returnLineKey = await GetReturnLineKey(connection, clientSecret);
-        Connection returnLineConnection = await EstablishInstanceConnection(returnLineEndpoint, Role.Server);
+        QAConnection returnLineConnection = await EstablishInstanceConnection(returnLineEndpoint, Role.Server);
         await AuthenticateReturnLine(returnLineConnection, clientSecret, returnLineKey);
         return new(connection, returnLineConnection);
     }
 
-    private static async Task<ClientSecret> ObtainClientSecret(Connection connection, Guid inviteCode)
+    private static async Task<ClientSecret> ObtainClientSecret(QAConnection connection, Guid inviteCode)
     {
         Response response = await connection.RequestAsync(new ObtainClientSecretRequest(inviteCode), (payloadType) => payloadType switch
         {
@@ -60,7 +57,7 @@ public class Client : Transceiver
         };
     }
 
-    private static async Task AuthenticateReturnLine(Connection returnLineConnection, ClientSecret clientSecret, Guid returnLineKey)
+    private static async Task AuthenticateReturnLine(QAConnection returnLineConnection, ClientSecret clientSecret, Guid returnLineKey)
     {
         Response response = await returnLineConnection.RequestAsync(new AuthenticateReturnLineRequest(clientSecret, returnLineKey), (payloadType) => payloadType switch
         {
@@ -71,7 +68,7 @@ public class Client : Transceiver
             throw new NotImplementedException();
     }
 
-    private static async Task<Guid> GetReturnLineKey(Connection connection, ClientSecret clientSecret)
+    private static async Task<Guid> GetReturnLineKey(QAConnection connection, ClientSecret clientSecret)
     {
         Response response = await connection.RequestAsync(new ObtainReturnLineKeyRequest(clientSecret), (payloadType) => payloadType switch
         {
@@ -84,7 +81,7 @@ public class Client : Transceiver
         return guidResponse.Guid;
     }
 
-    private class Chat(Connection connection, Connection returnLineConnection) : IChat
+    private class Chat(QAConnection connection, QAConnection returnLineConnection) : IChat
     {
         public event Func<Mail>? MailReceived;
 
@@ -100,7 +97,7 @@ public class Client : Transceiver
         }
     }
 
-    private async Task<Connection> EstablishInstanceConnection(IPEndPoint endpoint, Role role) => await ConnectAsync(() => gateway.InitiateConnectionAsync(endpoint, new(role, 60)));
+    private async Task<QAConnection> EstablishInstanceConnection(IPEndPoint endpoint, Role role) => await ConnectAsync(() => gateway.InitiateConnectionAsync(endpoint, new(role, 60)));
 }
 
 public interface IChat : IDisposable

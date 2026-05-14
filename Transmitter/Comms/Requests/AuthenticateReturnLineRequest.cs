@@ -1,4 +1,5 @@
 ﻿using Transmitter.Authentication;
+using Transmitter.Comms.Responses;
 
 namespace Transmitter.Comms.Requests;
 
@@ -27,4 +28,10 @@ public sealed class AuthenticateReturnLineRequest : AuthenticatedRequest<Authent
     {
         writer.Write(ReturnLineKey.ToByteArray());
     }
+
+    static ResponseDeserializationFinalizer IAuthenticatedRequest.FinalizeDescendantResponseDeserialization(ResponsePayloadType responsePayloadType) => responsePayloadType switch
+    {
+        ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
+        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType))
+    };
 }

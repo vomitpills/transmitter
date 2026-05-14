@@ -1,10 +1,8 @@
-﻿using System.Collections.ObjectModel;
-
-namespace Transmitter.Comms;
+﻿namespace Transmitter.Comms;
 
 public interface IRequest
 {
-    public abstract static ReadOnlyCollection<ResponseTemplate> ExpectedResponse { get; }
+    public abstract static ResponseDeserializationFinalizer FinalizeResponseDeserialization(ResponsePayloadType responsePayloadType);
     public abstract static Request FinalizeDeserialization(BinaryReader stream, RequestIntention intention, IDeserializationKey key);
     public static abstract RequestIntention Intention { get; }
 }
