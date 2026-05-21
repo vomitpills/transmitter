@@ -13,8 +13,9 @@ public class TcpGateway(IPEndPoint localEndPoint, Logger? logger = null) : Gatew
     {
         TcpClient client = new();
         await client.ConnectAsync(endPoint);
-        await OnOutgoing(new(client.GetStream()), options, cancellationToken);
-        await OnIncoming(new(client.GetStream()), cancellationToken);
+        LoggedStream loggerBinaryStream = new(client.GetStream(), logger?.CreateChild("STREAM") ?? new("unlabled"));
+        await OnOutgoing(new(loggerBinaryStream), options, cancellationToken);
+        await OnIncoming(new(loggerBinaryStream), cancellationToken);
     }
 
     public override void Start()
@@ -32,13 +33,14 @@ public class TcpGateway(IPEndPoint localEndPoint, Logger? logger = null) : Gatew
                 while (!cancellationTokenSource.IsCancellationRequested)
                 {
                     TcpClient tcpClient = await Listener.AcceptTcpClientAsync(cancellationTokenSource.Token);
-                    ConnectionOptions? incomingConnectionOptions = await OnIncoming(new(tcpClient.GetStream()), cancellationTokenSource.Token);
+                    LoggedStream loggerBinaryStream = new(tcpClient.GetStream(), logger?.CreateChild("STREAM") ?? new("unlabled"));
+                    ConnectionOptions? incomingConnectionOptions = await OnIncoming(new(loggerBinaryStream), cancellationTokenSource.Token);
                     if (incomingConnectionOptions is not ConnectionOptions options)
                     {
                         tcpClient.Dispose();
                         continue;
                     }
-                    await OnOutgoing(new(tcpClient.GetStream()), options, cancellationTokenSource.Token);
+                    await OnOutgoing(new(loggerBinaryStream), options, cancellationTokenSource.Token);
                 }
             }
             finally

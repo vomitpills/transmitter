@@ -2,7 +2,6 @@
 
 public interface IDeserializationKey { }
 
-// this is a rudimentary class kept in case we need to insert some data before the common request/response serialization scheme. might get deleted later.
 public abstract class Message
 {
     protected Message(IDeserializationKey key)
@@ -18,12 +17,12 @@ public abstract class Message
         SerializeDescendant(writer, logger);
     }
 
-    protected static IDeserializationKey DeserializeRoot(BinaryReader stream)
+    protected static IDeserializationKey DeserializeRoot(BinaryReader reader)
     {
         return new MessageDeserializationKey();
     }
 
     protected abstract void SerializeDescendant(BinaryWriter writer, Logger? logger = null);
 
-    private class MessageDeserializationKey() : IDeserializationKey { }
+    private record class MessageDeserializationKey() : IDeserializationKey;
 }

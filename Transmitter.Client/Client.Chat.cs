@@ -27,7 +27,7 @@ public partial class Client
         {
             while (true)
             {
-                Request request = await returnLineConnection.ReadRequestAsync((intention) => intention switch
+                Request request = await returnLineConnection.AcceptRequestAsync((intention) => intention switch
                 {
                     RequestIntention.AcknowledgeMailDelivery => AcknowledgeMailRequest.FinalizeDeserialization,
                     _ => throw new ArgumentOutOfRangeException(nameof(intention))
@@ -37,7 +37,7 @@ public partial class Client
                 {
                     case AcknowledgeMailRequest acknowledgeMailRequest:
                     {
-                        await returnLineConnection.WriteResponseAsync(new EmptyResponse(RequestStatus.OK));
+                        await returnLineConnection.RespondAsync(new EmptyResponse(RequestStatus.OK));
                         MailReceived?.Invoke(acknowledgeMailRequest.Transaction);
                     }
                     break;

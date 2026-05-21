@@ -12,7 +12,7 @@ public partial class Client : Transceiver
 {
     private readonly PersistentClientState persistentState;
 
-    readonly TcpGateway gateway = new(new(IPAddress.Any, 0));
+    readonly TcpGateway gateway = new(new(IPAddress.Any, 0), new("CLIENT-GATEWAY"));
 
     public Client(PersistentClientState state)
     {
@@ -74,7 +74,7 @@ public partial class Client : Transceiver
         return guidResponse.Guid;
     }
 
-    private async Task<QAConnection> EstablishInstanceConnection(IPEndPoint endpoint, Role role) => await ConnectAsync(() => gateway.InitiateConnectionAsync(endpoint, new(role, 60)));
+    private Task<QAConnection> EstablishInstanceConnection(IPEndPoint endpoint, Role role) => ConnectAsync(() => gateway.InitiateConnectionAsync(endpoint, new(role, (short)TimeSpan.FromMinutes(3).TotalSeconds)));
 }
 
 public interface IChat : IDisposable

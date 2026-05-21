@@ -10,6 +10,7 @@ public interface IRequest
 // add cooldown for specific request intentions?
 public enum RequestIntention : byte
 {
+    KeepAlive,
     ObtainSecret,
     ObtainReturnLineKey,
     Authenticate,

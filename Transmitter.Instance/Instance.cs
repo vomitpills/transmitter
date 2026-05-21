@@ -24,18 +24,17 @@ public partial class Instance : Transceiver, IDisposable
     public Instance(ushort port, ushort returnLinePort, PersistentInstanceState state)
     {
         persistentState = state;
-        gateway = new TcpGateway(new(IPAddress.Any, port));
+        gateway = new TcpGateway(new(IPAddress.Any, port), new("INSTANCE-GATEWAY"));
         Mount(gateway);
-        returnLineGateway = new TcpGateway(new(IPAddress.Any, returnLinePort));
+        returnLineGateway = new TcpGateway(new(IPAddress.Any, returnLinePort), new("INSTANCE-GATEWAY-RL"));
         Mount(returnLineGateway);
+        NewConnection += DispatchNewConnection;
     }
 
     public void Start()
     {
         gateway.Start();
         returnLineGateway.Start();
-
-        NewConnection += DispatchNewConnection;
     }
 
     public void Stop()  
@@ -69,7 +68,7 @@ public partial class Instance : Transceiver, IDisposable
             using CancellationTokenSource requestGraceWindow = new(TimeSpan.FromSeconds(10));
             using CancellationTokenSource linkedToken = CancellationTokenSource.CreateLinkedTokenSource(authenticationGraceWindow.Token, requestGraceWindow.Token);
 
-            Request request = await connectionAsServer.ReadRequestAsync((intention) => intention switch
+            Request request = await connectionAsServer.AcceptRequestAsync((intention) => intention switch
             {
                 RequestIntention.ObtainSecret => ObtainClientSecretRequest.FinalizeDeserialization,
                 RequestIntention.ObtainReturnLineKey => ObtainReturnLineKeyRequest.FinalizeDeserialization,
@@ -91,7 +90,7 @@ public partial class Instance : Transceiver, IDisposable
 
                 _ => throw new NotSupportedException()
             };
-            await connectionAsServer.WriteResponseAsync(response, linkedToken.Token);
+            await connectionAsServer.RespondAsync(response, linkedToken.Token);
 
             if (authenticated)
                 break;
@@ -101,13 +100,13 @@ public partial class Instance : Transceiver, IDisposable
 
         while (true)
         {
-            Request request = await connectionAsServer.ReadRequestAsync((intention) => intention switch
+            Request request = await connectionAsServer.AcceptRequestAsync((intention) => intention switch
             {
                 RequestIntention.SendMail => SendMailRequest.FinalizeDeserialization,
                 _ => throw new ArgumentOutOfRangeException(nameof(intention))
             });
             Response response = GetResponse(id, request);
-            await connectionAsServer.WriteResponseAsync(response);
+            await connectionAsServer.RespondAsync(response);
         }
     }
 
@@ -150,7 +149,7 @@ public partial class Instance : Transceiver, IDisposable
             using CancellationTokenSource requestGraceWindow = new(TimeSpan.FromSeconds(10));
             using CancellationTokenSource linkedToken = CancellationTokenSource.CreateLinkedTokenSource(authenticationGraceWindow.Token, requestGraceWindow.Token);
 
-            Request request = await connectionAsClient.ReadRequestAsync((intention) => intention switch
+            Request request = await connectionAsClient.AcceptRequestAsync((intention) => intention switch
             {
                 RequestIntention.Authenticate => AuthenticateReturnLineConnectionRequest.FinalizeDeserialization,
                 _ => throw new ArgumentOutOfRangeException(nameof(intention))
@@ -160,7 +159,7 @@ public partial class Instance : Transceiver, IDisposable
                 throw new NotSupportedException();
 
             authenticated = persistentState.TryGetId(authRequest.ClientSecret, out id) && RedeemReturnLineKey(authRequest.ClientSecret, authRequest.ReturnLineKey);
-            await connectionAsClient.WriteResponseAsync(new EmptyResponse(authenticated? RequestStatus.OK : RequestStatus.FAULTY_DATA), linkedToken.Token);
+            await connectionAsClient.RespondAsync(new EmptyResponse(authenticated? RequestStatus.OK : RequestStatus.FAULTY_DATA), linkedToken.Token);
 
             if (authenticated)
                 break;

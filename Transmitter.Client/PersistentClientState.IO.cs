@@ -33,7 +33,13 @@ partial class PersistentClientState : IDisposable // move shared logic into an a
     {
         using BinaryWriter writer = new(atomicWriter.BeginTransaction());
         writer.Write(BitConverter.GetBytes(FORMAT_VERSION));
-        
+        if (Profile is not null)
+        {
+            writer.Write(true);
+            Profile.Serialize(writer);
+        }
+        else
+            writer.Write(false);
     }
 
     private static PersistentClientState Load(string filePath)

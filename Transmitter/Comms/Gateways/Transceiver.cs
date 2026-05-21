@@ -53,7 +53,7 @@ public abstract class Transceiver(Predicate<ConnectionOptions>? connectionFilter
         lock (terminalsLock)
         {
             if (OutgoingTerminals.Remove(options.Guid, out BinaryWriter? writer))
-                NewConnection?.Invoke(new(options, writer, reader));
+                NewConnection?.Invoke(new(options, writer, reader, new("connection-" + Random.Shared.GetHexString(4))));
             else
                 IncomingTerminals.Add(options.Guid, reader); // remove after timeout
         }
@@ -69,7 +69,7 @@ public abstract class Transceiver(Predicate<ConnectionOptions>? connectionFilter
         lock (terminalsLock)
         {
             if (IncomingTerminals.Remove(options.Guid, out BinaryReader? reader))
-                NewConnection?.Invoke(new(options, writer, reader));
+                NewConnection?.Invoke(new(options, writer, reader, new("connection-" + Random.Shared.GetHexString(4))));
             else
                 OutgoingTerminals.Add(options.Guid, writer); // remove after timeout
         }

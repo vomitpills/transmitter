@@ -1,5 +1,4 @@
 ﻿using Transmitter.Authentication;
-using Transmitter.Authentication;
 using Transmitter.Comms.Responses;
 
 namespace Transmitter.Comms.Requests;
