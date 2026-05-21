@@ -3,7 +3,7 @@ using Transmitter.Comms;
 
 namespace Transmitter.Instance;
 
-internal sealed partial class PersistentServerState
+public sealed partial class PersistentInstanceState
 {
     private HashSet<Guid> ValidInvites { get; init; } = [];
     private PeerCollection Peers { get; init; } = [];

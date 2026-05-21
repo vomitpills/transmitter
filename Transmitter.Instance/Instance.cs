@@ -10,13 +10,7 @@ namespace Transmitter.Instance;
 
 public partial class Instance : Transceiver, IDisposable
 {
-    #if DEBUG
-    private const string SAVE_FILE_NAME = "state-dev";
-#else
-    private const string SAVE_FILE_NAME = "state";
-#endif
-
-    private readonly PersistentServerState persistentState = PersistentServerState.LoadOrCreate(Path.Join(Environment.CurrentDirectory, SAVE_FILE_NAME));
+    private readonly PersistentInstanceState persistentState;
     private readonly Dictionary<ReturnLineAccessCode, DateTimeOffset> returnLineAccessCodes = [];
     private readonly List<Guid> returnLineReachablePeers = [];
 
@@ -27,8 +21,9 @@ public partial class Instance : Transceiver, IDisposable
 
     private readonly List<Task> activeConnections = [];
 
-    public Instance(ushort port, ushort returnLinePort)
+    public Instance(ushort port, ushort returnLinePort, PersistentInstanceState state)
     {
+        persistentState = state;
         gateway = new TcpGateway(new(IPAddress.Any, port));
         Mount(gateway);
         returnLineGateway = new TcpGateway(new(IPAddress.Any, returnLinePort));

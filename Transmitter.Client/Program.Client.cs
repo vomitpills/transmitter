@@ -1,6 +1,5 @@
 ﻿using System.Net;
 
-using Transmitter.Comms;
 using Transmitter.Comms.MailContents;
 
 namespace Transmitter.Client;
@@ -8,15 +7,11 @@ namespace Transmitter.Client;
 internal static class Program
 {
 #if DEBUG
-    private const string CONFIG_NAME = "config-03.debug";
-#else
-    private const string CONFIG_NAME = "config-03";
-#endif
-
-#if DEBUG
+    private const string SAVE_FILE_NAME = "config-03-dev";
     private const ushort port = 57171;
     private const ushort returnLinePort = 57172;
 #else
+    private const string SAVE_FILE_NAME = "config-03";
     private const ushort port = 57181;
     private const ushort returnLinePort = 57182;
 #endif
@@ -26,8 +21,9 @@ internal static class Program
 
     public static async Task Main()
     {
-        Profile profile = new("test-1", ConsoleColor.Green, (Profile.BeepRange.From + Profile.BeepRange.To) / 2);
-        Client client = new(profile);
+        PersistentClientState state = PersistentClientState.LoadOrCreate(Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "transmitter", SAVE_FILE_NAME));
+        Client client = new(state);
+
         Guid inviteCode = Guid.Parse(Console.ReadLine()!);
         IChat chat = await client.ConnectToInstance(IPAddress.Loopback, port, returnLinePort, inviteCode);
 

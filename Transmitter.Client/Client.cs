@@ -10,16 +10,13 @@ namespace Transmitter.Client;
 
 public partial class Client : Transceiver
 {
-    public Profile Profile { get; private set; }
-    private readonly Dictionary<Guid, Profile> profileCache = [];
+    private readonly PersistentClientState persistentState;
 
     readonly TcpGateway gateway = new(new(IPAddress.Any, 0));
 
-    public Client(Profile profile, IReadOnlyDictionary<Guid, Profile>? profileCache = null)
+    public Client(PersistentClientState state)
     {
-        Profile = profile;
-        if (profileCache is not null)
-            this.profileCache = new(profileCache);
+        persistentState = state;
         Mount(gateway);
         gateway.Start();
     }
