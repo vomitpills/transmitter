@@ -16,9 +16,9 @@ public readonly struct ClientSecret : IEquatable<ClientSecret>, ISerializable<Cl
 
     public static ClientSecret Deserialize(BinaryReader reader)
     {
-        Span<byte> buffer = stackalloc byte[Length];
+        byte[] buffer = new byte[Length];
         reader.ReadExactly(buffer);
-        return new();
+        return new(buffer);
     }
 
     public bool Equals(ClientSecret other) => data.Span.SequenceEqual(other.data.Span);

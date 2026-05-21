@@ -13,9 +13,9 @@ public abstract class Message
 
     protected Message() { }
 
-    public void Serialize(BinaryWriter writer)
+    public void Serialize(BinaryWriter writer, Logger? logger = null)
     {
-        SerializeDescendant(writer);
+        SerializeDescendant(writer, logger);
     }
 
     protected static IDeserializationKey DeserializeRoot(BinaryReader stream)
@@ -23,7 +23,7 @@ public abstract class Message
         return new MessageDeserializationKey();
     }
 
-    protected abstract void SerializeDescendant(BinaryWriter writer);
+    protected abstract void SerializeDescendant(BinaryWriter writer, Logger? logger = null);
 
     private class MessageDeserializationKey() : IDeserializationKey { }
 }

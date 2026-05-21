@@ -3,7 +3,7 @@ using System.Net.Sockets;
 
 namespace Transmitter.Comms.Gateways;
 
-public class TcpGateway(IPEndPoint localEndPoint) : Gateway
+public class TcpGateway(IPEndPoint localEndPoint, Logger? logger = null) : Gateway
 {
     private TcpListener Listener { get; } = new(localEndPoint);
     private Task? clientLoopTask;
@@ -60,5 +60,5 @@ public class TcpGateway(IPEndPoint localEndPoint) : Gateway
         cancelClientLoopTask!.Wait(); // prolly a bad idea
     }
 
-    public override void Dispose() => GC.SuppressFinalize(this);
+    public override void Dispose() => GC.SuppressFinalize(this); // prolly a bad idea too
 }

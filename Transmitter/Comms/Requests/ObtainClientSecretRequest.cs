@@ -35,6 +35,6 @@ public sealed class ObtainClientSecretRequest : Request<ObtainClientSecretReques
     {
         ResponsePayloadType.ClientSecret => ClientSecretResponse.FinalizeDeserialization,
         ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
-        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType))
+        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType), responsePayloadType.ToString(), null)
     };
 }

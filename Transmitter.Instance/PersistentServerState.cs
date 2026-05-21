@@ -1,30 +1,27 @@
 ﻿using Transmitter.Authentication;
 using Transmitter.Comms;
 
-namespace Transmitter.Server;
+namespace Transmitter.Instance;
 
 internal sealed partial class PersistentServerState
 {
-    private HashSet<ClientSecret> ValidInvites { get; init; } = [];
+    private HashSet<Guid> ValidInvites { get; init; } = [];
     private PeerCollection Peers { get; init; } = [];
 
-    public ClientSecret EmitInviteCode()
+    public Guid EmitInviteCode()
     {
-        ClientSecret clientSecret = ClientSecret.EmitInviteCode();
-        ValidInvites.Add(clientSecret);
+        Guid inviteCode = Guid.NewGuid();
+        ValidInvites.Add(inviteCode);
         Save();
-        return clientSecret;
+        return inviteCode;
     }
 
-    public bool TryRegisterUser(ClientSecret inviteCode, out ClientSecret clientSecret)
+    public bool TryRegisterUser(Guid inviteCode, out ClientSecret clientSecret)
     {
-        if (inviteCode.IsAuthToken)
-            throw new FaultyDataException("invite-code");
-
         if (ValidInvites.Remove(inviteCode))
         {
             Save();
-            clientSecret = ClientSecret.EmitAuthToken();
+            clientSecret = ClientSecret.Emit();
             Peers.Add(new(clientSecret, null));
             Save();
             return true;
@@ -37,6 +34,16 @@ internal sealed partial class PersistentServerState
     public Profile? GetProfile(ClientSecret auth) => Peers[auth].Profile;
 
     public Guid GetId(ClientSecret auth) => Peers[auth].Id;
+    public bool TryGetId(ClientSecret auth, out Guid guid)
+    {
+        if (!Peers.TryGet(auth, out Peer? peer))
+        {
+            guid = default;
+            return false;
+        }
+        guid = peer.Id;
+        return true;
+    }
 
     public void UpdateProfile(ClientSecret auth, Profile profile)
     {
@@ -67,7 +74,7 @@ internal sealed partial class PersistentServerState
         return success;
     }
 
-    public async Task<Transaction> BeginTransactionReadAsync(Guid receiver, CancellationToken cancellationToken = default)
+    public async Task<Transaction> PeekTransactionQueue(Guid receiver, CancellationToken cancellationToken = default)
     {
         Peer peer = Peers[receiver];
         Transaction? transaction;
@@ -96,21 +103,4 @@ internal sealed partial class PersistentServerState
     }
 
     public IEnumerable<Guid> EnumerateKnownIds() => Peers.Select(p => p.Id);
-}
-
-public class Transaction : ISerializable<Transaction>
-{
-    //public OldMail Mail { get; }
-    public Guid SenderId { get; }
-    public Guid TransactionId { get; }
-
-    public static Transaction Deserialize(BinaryReader reader)
-    {
-        throw new NotImplementedException();
-    }
-
-    public void Serialize(BinaryWriter writer)
-    {
-        throw new NotImplementedException();
-    }
 }

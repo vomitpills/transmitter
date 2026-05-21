@@ -7,12 +7,14 @@ public interface IRequest
     public static abstract RequestIntention Intention { get; }
 }
 
-// add challenge (e.g. sum two bytes from payload)
 // add cooldown for specific request intentions?
 public enum RequestIntention : byte
 {
     ObtainSecret,
-    Authenticate
+    ObtainReturnLineKey,
+    Authenticate,
+    SendMail,
+    AcknowledgeMailDelivery
 }
 
 public abstract class Request : Message // this is atrocious
@@ -21,15 +23,15 @@ public abstract class Request : Message // this is atrocious
 
     protected Request() { }
 
-    public static Request BeginDeserialization(BinaryReader stream, Func<RequestIntention, RequestDeserializationFinalizer> finalizeFactory)
+    public static Request BeginDeserialization(BinaryReader stream, Func<RequestIntention, RequestDeserializationFinalizer> finalizeFactory, Logger? logger = null)
     {
-        using var _ = Logger.Shared.LogContext(nameof(BeginDeserialization));
         IDeserializationKey key = DeserializeRoot(stream);
 
         RequestIntention intention = (RequestIntention)stream.ReadByte();
         if (!Enum.IsDefined(intention))
             throw new ArgumentOutOfRangeException(nameof(stream), $"'{intention}' is not defined for {nameof(RequestIntention)}");
 
+        logger?.Log($"Reading request ({nameof(intention)}:{intention})");
         return finalizeFactory(intention)(stream, intention, key);
     }
 }
@@ -44,8 +46,9 @@ public abstract class Request<T> : Request where T : IRequest
 
     protected Request() : base() { }
 
-    protected sealed override void SerializeDescendant(BinaryWriter writer)
+    protected sealed override void SerializeDescendant(BinaryWriter writer, Logger? logger = null)
     {
+        logger?.Log($"Writing request ({nameof(T.Intention)}:{T.Intention})");
         writer.Write((byte)T.Intention);
         FinalizeSerialization(writer);
     }

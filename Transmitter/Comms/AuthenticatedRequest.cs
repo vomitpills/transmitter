@@ -6,13 +6,14 @@ public interface IAuthenticatedRequest : IRequest
 {
     public abstract static Request FinalizeDescendantDeserialization(BinaryReader reader, RequestIntention intention, ClientSecret clientSecret, IDeserializationKey key);
     public abstract static ResponseDeserializationFinalizer FinalizeDescendantResponseDeserialization(ResponsePayloadType responsePayloadType);
+    public abstract static RequestIntention DescendantIntention { get; }
 }
 
 public abstract class AuthenticatedRequest<T> : Request<T>, IRequest where T : Request<T>, IAuthenticatedRequest
 {
-    public static RequestIntention Intention => T.Intention;
+    public static RequestIntention Intention => T.DescendantIntention;
 
-    private ClientSecret ClientSecret { get; }
+    public ClientSecret ClientSecret { get; }
 
     public AuthenticatedRequest(ClientSecret clientSecret)
     {

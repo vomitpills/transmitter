@@ -1,20 +1,30 @@
 ﻿namespace Transmitter.Comms.Gateways;
 
-public sealed class QAConnection(ConnectionOptions connectionOptions, BinaryWriter writer, BinaryReader reader) : IDisposable // add keepalive packet logic
+public sealed class QAConnection(ConnectionOptions connectionOptions, BinaryWriter writer, BinaryReader reader, Logger? logger = null) : IDisposable // add keepalive packet logic
 {
     public ConnectionOptions ConnectionOptions { get; } = connectionOptions;
 
-    public async Task<Response> RequestAsync(Request request, Func<ResponsePayloadType, ResponseDeserializationFinalizer> finalizerChooser, CancellationToken cancellationToken = default)
+    public async Task<Response> RequestAsync<T>(T request, CancellationToken cancellationToken = default) where T : Request, IRequest
     {
         await WriteRequestAsync(request, cancellationToken);
-        return await ReadResponseAsync(finalizerChooser, cancellationToken);
+        return await ReadResponseAsync(T.FinalizeResponseDeserialization, cancellationToken);
     }
 
-    private async Task WriteRequestAsync(Request request, CancellationToken cancellationToken = default) => request.Serialize(writer);
-    private async Task<Response> ReadResponseAsync(Func<ResponsePayloadType, ResponseDeserializationFinalizer> finalizerChooser, CancellationToken cancellationToken = default) => Response.BeginDeserialization(reader, finalizerChooser);
+    private async Task WriteRequestAsync(Request request, CancellationToken cancellationToken = default)
+    {
+        request.Serialize(writer, logger);
+        writer.Flush();
+    }
 
-    public async Task<Request> ReadRequestAsync(Func<RequestIntention, RequestDeserializationFinalizer> finalizerChooser, CancellationToken cancellationToken = default) => Request.BeginDeserialization(reader, finalizerChooser);
-    public async Task WriteResponseAsync(Response response, CancellationToken cancellationToken = default) => response.Serialize(writer);
+    private async Task<Response> ReadResponseAsync(Func<ResponsePayloadType, ResponseDeserializationFinalizer> finalizerChooser, CancellationToken cancellationToken = default) => Response.BeginDeserialization(reader, finalizerChooser, logger);
+
+    public async Task<Request> ReadRequestAsync(Func<RequestIntention, RequestDeserializationFinalizer> finalizerChooser, CancellationToken cancellationToken = default) => Request.BeginDeserialization(reader, finalizerChooser, logger);
+
+    public async Task WriteResponseAsync(Response response, CancellationToken cancellationToken = default)
+    {
+        response.Serialize(writer, logger);
+        writer.Flush();
+    }
 
     //private async Task SendKeepAlive(Stream stream)
     //{

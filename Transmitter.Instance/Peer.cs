@@ -1,10 +1,11 @@
 ﻿using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 
 using Transmitter.Authentication;
 using Transmitter.Comms;
 
-namespace Transmitter.Server;
+namespace Transmitter.Instance;
 
 internal sealed class Peer : ISerializable<Peer>
 {
@@ -107,6 +108,9 @@ internal sealed class PeerCollection : IEnumerable<Peer>
 
     public Peer this[Guid id] => idToPeer[id];
     public Peer this[ClientSecret auth] => authToPeer[auth];
+
+    public bool TryGet(Guid id, [NotNullWhen(true)] out Peer? peer) => idToPeer.TryGetValue(id, out peer);
+    public bool TryGet(ClientSecret clientSecret, [NotNullWhen(true)] out Peer? peer) => authToPeer.TryGetValue(clientSecret, out peer);
 
     public int Count => idToPeer.Count;
 

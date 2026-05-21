@@ -11,9 +11,10 @@ public enum RequestStatus : sbyte
     OK = 0,
     CACHED = 30,
 
-    PROTOCOL_VERSION_MISMATCH = -40,
+    FAULTY_DATA = -10,
     MALFORMED_REQUEST = -20,
-    TEAPOT = -25
+    TEAPOT = -25,
+    PROTOCOL_VERSION_MISMATCH = -40,
 }
 
 public enum ResponsePayloadType : byte
@@ -27,11 +28,13 @@ public abstract class Response : Message
 {
     public abstract RequestStatus Status { get; }
 
+    public virtual bool IndicatesSuccess => Status >= 0;
+
     protected Response(IDeserializationKey key) : base(key) { }
 
     protected Response() : base() { }
 
-    public static Response BeginDeserialization(BinaryReader reader, Func<ResponsePayloadType, ResponseDeserializationFinalizer> deserializeFinishChooser)
+    public static Response BeginDeserialization(BinaryReader reader, Func<ResponsePayloadType, ResponseDeserializationFinalizer> deserializeFinishChooser, Logger? logger = null)
     {
         IDeserializationKey key = DeserializeRoot(reader);
 
@@ -42,6 +45,8 @@ public abstract class Response : Message
         ResponsePayloadType payloadType = (ResponsePayloadType)reader.ReadByte();
         if (!Enum.IsDefined(payloadType))
             throw new ArgumentOutOfRangeException(nameof(reader), $"'{payloadType}' is not defined for {nameof(ResponsePayloadType)}");
+
+        logger?.Log($"Reading response ({nameof(status)}:{status} {nameof(payloadType)}:{payloadType})");
 
         return deserializeFinishChooser(payloadType)(reader, status, payloadType, key);
     }
@@ -59,8 +64,9 @@ public abstract class Response<T> : Response where T : Response<T>, IResponse
 
     protected Response() : base() { }
 
-    protected sealed override void SerializeDescendant(BinaryWriter writer)
+    protected sealed override void SerializeDescendant(BinaryWriter writer, Logger? logger = null)
     {
+        logger?.Log($"Writing response ({nameof(Status)}:{Status} {nameof(T.PayloadType)}:{T.PayloadType})");
         writer.Write(unchecked((byte)Status));
         writer.Write((byte)T.PayloadType);
         SerializeFinal(writer);

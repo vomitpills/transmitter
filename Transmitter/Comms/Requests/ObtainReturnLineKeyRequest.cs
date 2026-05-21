@@ -5,6 +5,8 @@ namespace Transmitter.Comms.Requests;
 
 public sealed class ObtainReturnLineKeyRequest : AuthenticatedRequest<ObtainReturnLineKeyRequest>, IAuthenticatedRequest
 {
+    static RequestIntention IAuthenticatedRequest.DescendantIntention { get; } = RequestIntention.ObtainReturnLineKey;
+    
     public ObtainReturnLineKeyRequest(ClientSecret clientSecret) : base(clientSecret) { }
 
     private ObtainReturnLineKeyRequest(IDeserializationKey key, RequestIntention intention, ClientSecret clientSecret) : base(key, intention, clientSecret) { }
@@ -13,9 +15,9 @@ public sealed class ObtainReturnLineKeyRequest : AuthenticatedRequest<ObtainRetu
 
     static ResponseDeserializationFinalizer IAuthenticatedRequest.FinalizeDescendantResponseDeserialization(ResponsePayloadType responsePayloadType) => responsePayloadType switch
     {
-        ResponsePayloadType.ClientSecret => ClientSecretResponse.FinalizeDeserialization,
+        ResponsePayloadType.Guid => GuidResponse.FinalizeDeserialization,
         ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
-        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType))
+        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType), responsePayloadType.ToString(), null)
     };
 
     protected override void FinalizeDescendantSerialization(BinaryWriter writer) { }

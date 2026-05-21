@@ -8,7 +8,7 @@ using Transmitter.Comms.Responses;
 
 namespace Transmitter.Client;
 
-public class Client : Transceiver
+public partial class Client : Transceiver
 {
     public Profile Profile { get; private set; }
     private readonly Dictionary<Guid, Profile> profileCache = [];
@@ -20,6 +20,7 @@ public class Client : Transceiver
         Profile = profile;
         if (profileCache is not null)
             this.profileCache = new(profileCache);
+        Mount(gateway);
         gateway.Start();
     }
 
@@ -39,17 +40,14 @@ public class Client : Transceiver
     {
         Guid returnLineKey = await GetReturnLineKey(connection, clientSecret);
         QAConnection returnLineConnection = await EstablishInstanceConnection(returnLineEndpoint, Role.Server);
+        await AuthenticateCommConnection(connection, clientSecret);
         await AuthenticateReturnLine(returnLineConnection, clientSecret, returnLineKey);
-        return new(connection, returnLineConnection);
+        return new(connection, returnLineConnection, clientSecret);
     }
 
     private static async Task<ClientSecret> ObtainClientSecret(QAConnection connection, Guid inviteCode)
     {
-        Response response = await connection.RequestAsync(new ObtainClientSecretRequest(inviteCode), (payloadType) => payloadType switch
-        {
-            ResponsePayloadType.ClientSecret => ClientSecretResponse.FinalizeDeserialization, // make the request class implement this
-            _ => throw new ArgumentOutOfRangeException(nameof(payloadType))
-        });
+        Response response = await connection.RequestAsync(new ObtainClientSecretRequest(inviteCode));
         return response switch
         {
             ClientSecretResponse clientSecretResponse => clientSecretResponse.ClientSecret,
@@ -57,44 +55,26 @@ public class Client : Transceiver
         };
     }
 
+    private static async Task AuthenticateCommConnection(QAConnection connection, ClientSecret clientSecret)
+    {
+        Response response = await connection.RequestAsync(new AuthenticateCommConnectionRequest(clientSecret));
+        if (response.Status is not RequestStatus.OK)
+            throw new NotImplementedException();
+    }
+
     private static async Task AuthenticateReturnLine(QAConnection returnLineConnection, ClientSecret clientSecret, Guid returnLineKey)
     {
-        Response response = await returnLineConnection.RequestAsync(new AuthenticateReturnLineRequest(clientSecret, returnLineKey), (payloadType) => payloadType switch
-        {
-            ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
-            _ => throw new ArgumentOutOfRangeException(nameof(payloadType))
-        });
+        Response response = await returnLineConnection.RequestAsync(new AuthenticateReturnLineConnectionRequest(clientSecret, returnLineKey));
         if (response.Status is not RequestStatus.OK)
             throw new NotImplementedException();
     }
 
     private static async Task<Guid> GetReturnLineKey(QAConnection connection, ClientSecret clientSecret)
     {
-        Response response = await connection.RequestAsync(new ObtainReturnLineKeyRequest(clientSecret), (payloadType) => payloadType switch
-        {
-            ResponsePayloadType.Guid => GuidResponse.FinalizeDeserialization,
-            ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
-            _ => throw new ArgumentOutOfRangeException(nameof(payloadType))
-        });
+        Response response = await connection.RequestAsync(new ObtainReturnLineKeyRequest(clientSecret));
         if (response is not GuidResponse guidResponse)
             throw new NotImplementedException();
         return guidResponse.Guid;
-    }
-
-    private class Chat(QAConnection connection, QAConnection returnLineConnection) : IChat
-    {
-        public event Func<Mail>? MailReceived;
-
-        public Task PostMail(Mail mail)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void Dispose()
-        {
-            connection.Dispose();
-            returnLineConnection.Dispose();
-        }
     }
 
     private async Task<QAConnection> EstablishInstanceConnection(IPEndPoint endpoint, Role role) => await ConnectAsync(() => gateway.InitiateConnectionAsync(endpoint, new(role, 60)));
@@ -102,6 +82,6 @@ public class Client : Transceiver
 
 public interface IChat : IDisposable
 {
-    public event Func<Mail>? MailReceived;
-    public Task PostMail(Mail mail);
+    public event Action<Transaction>? MailReceived;
+    public Task PostMail(Mail mail, Guid recipient);
 }

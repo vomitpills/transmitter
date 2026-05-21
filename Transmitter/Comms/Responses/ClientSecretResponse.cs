@@ -4,7 +4,7 @@ namespace Transmitter.Comms.Responses;
 
 public sealed class ClientSecretResponse : Response<ClientSecretResponse>, IResponse
 {
-    public static ResponsePayloadType PayloadType { get; } = ResponsePayloadType.Guid;
+    public static ResponsePayloadType PayloadType { get; } = ResponsePayloadType.ClientSecret;
 
     public override RequestStatus Status { get; }
 

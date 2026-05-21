@@ -3,16 +3,18 @@ using Transmitter.Comms.Responses;
 
 namespace Transmitter.Comms.Requests;
 
-public sealed class AuthenticateReturnLineRequest : AuthenticatedRequest<AuthenticateReturnLineRequest>, IAuthenticatedRequest
+public sealed class AuthenticateReturnLineConnectionRequest : AuthenticatedRequest<AuthenticateReturnLineConnectionRequest>, IAuthenticatedRequest
 {
-    private Guid ReturnLineKey { get; }
+    static RequestIntention IAuthenticatedRequest.DescendantIntention { get; } = RequestIntention.Authenticate;
 
-    public AuthenticateReturnLineRequest(ClientSecret clientSecret, Guid returnLineKey) : base(clientSecret)
+    public Guid ReturnLineKey { get; }
+
+    public AuthenticateReturnLineConnectionRequest(ClientSecret clientSecret, Guid returnLineKey) : base(clientSecret)
     {
         ReturnLineKey = returnLineKey;
     }
 
-    private AuthenticateReturnLineRequest(IDeserializationKey key, RequestIntention intention, ClientSecret clientSecret, Guid returnLineKey) : base(key, intention, clientSecret)
+    private AuthenticateReturnLineConnectionRequest(IDeserializationKey key, RequestIntention intention, ClientSecret clientSecret, Guid returnLineKey) : base(key, intention, clientSecret)
     {
         ReturnLineKey = returnLineKey;
     }
@@ -21,7 +23,7 @@ public sealed class AuthenticateReturnLineRequest : AuthenticatedRequest<Authent
     {
         Span<byte> guidBuffer = stackalloc byte[16];
         reader.ReadExactly(guidBuffer);
-        return new AuthenticateReturnLineRequest(key, intention, clientSecret, new(guidBuffer));
+        return new AuthenticateReturnLineConnectionRequest(key, intention, clientSecret, new(guidBuffer));
     }
 
     protected override void FinalizeDescendantSerialization(BinaryWriter writer)
@@ -32,6 +34,6 @@ public sealed class AuthenticateReturnLineRequest : AuthenticatedRequest<Authent
     static ResponseDeserializationFinalizer IAuthenticatedRequest.FinalizeDescendantResponseDeserialization(ResponsePayloadType responsePayloadType) => responsePayloadType switch
     {
         ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
-        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType))
+        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType), responsePayloadType.ToString(), null)
     };
 }

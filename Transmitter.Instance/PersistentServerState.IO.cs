@@ -1,8 +1,6 @@
 ﻿using System.Text;
 
-using Transmitter.Authentication;
-
-namespace Transmitter.Server;
+namespace Transmitter.Instance;
 
 partial class PersistentServerState : IDisposable
 {
@@ -32,16 +30,16 @@ partial class PersistentServerState : IDisposable
 
     private void Save()
     {
-        using Stream stream = atomicWriter.BeginTransaction();
-        stream.Write(BitConverter.GetBytes(FORMAT_VERSION));
+        using BinaryWriter writer = new(atomicWriter.BeginTransaction());
+        writer.Write(BitConverter.GetBytes(FORMAT_VERSION));
         
-        stream.WriteByte((byte)ValidInvites.Count);
+        writer.Write((byte)ValidInvites.Count);
         foreach (var inviteCode in ValidInvites)
-            inviteCode.Serialize(stream);
+            writer.Write(inviteCode.ToByteArray());
 
-        stream.WriteByte((byte)Peers.Count);
+        writer.Write((byte)Peers.Count);
         foreach (var peer in Peers)
-            peer.Serialize(stream);
+            peer.Serialize(writer);
     }
 
     private static PersistentServerState Load(string filePath)
@@ -53,14 +51,14 @@ partial class PersistentServerState : IDisposable
             throw new InvalidOperationException("Format version mismatch");
 
         byte validInvitesLength = (byte)stream.ReadByte();
-        ClientSecret[] validInvites = new ClientSecret[validInvitesLength];
+        Guid[] validInvites = new Guid[validInvitesLength];
         for (int i = 0; i < validInvitesLength; i++)
-            validInvites[i] = ClientSecret.Deserialize(stream);
+            validInvites[i] = new(reader.ReadBytes(16));
 
         byte peersCount = (byte)stream.ReadByte();
         Peer[] peers = new Peer[peersCount];
         for (int i = 0; i < peersCount; i++)
-            peers[i] = Peer.Deserialize(stream);
+            peers[i] = Peer.Deserialize(reader);
         
         return new(filePath)
         {
