@@ -16,7 +16,7 @@ public sealed class QAConnection : IDisposable
 
     public ConnectionOptions ConnectionOptions { get; }
 
-    private DateTimeOffset lastActivity; // vague naming
+    private DateTimeOffset lastRequestTime;
 
     public QAConnection(ConnectionOptions connectionOptions, BinaryWriter writer, BinaryReader reader, Logger? logger = null)
     {
@@ -38,12 +38,19 @@ public sealed class QAConnection : IDisposable
         if (connectionOptions.Role is Role.Client)
             Task.Factory.StartNew(async () =>
             {
+                TimeSpan delay = connectionOptions.KeepAliveInterval;
                 while (!bgTasksCancellation.IsCancellationRequested)
                 {
-                    await Task.Delay(connectionOptions.KeepAliveInterval, bgTasksCancellation.Token);
-                    if (connectionOptions.SkipKeepAliveIfRecentActivity && (DateTimeOffset.UtcNow - lastActivity) < connectionOptions.KeepAliveInterval)
+                    await Task.Delay(delay, bgTasksCancellation.Token); // make the delay adaptive
+                    TimeSpan intervalDifference = DateTimeOffset.UtcNow - lastRequestTime;
+                    if (intervalDifference < connectionOptions.KeepAliveInterval)
+                    {
+                        delay = intervalDifference;
                         continue;
-                    _ = await RequestAsync(ChannelId.KeepAlive, new KeepAliveRequest(), bgTasksCancellation.Token);
+                    }
+                    else
+                        delay = connectionOptions.KeepAliveInterval;
+                    await RequestAsync(ChannelId.KeepAlive, new KeepAliveRequest(), bgTasksCancellation.Token);
                 }
             }, TaskCreationOptions.LongRunning);
         else
@@ -76,7 +83,7 @@ public sealed class QAConnection : IDisposable
             writer.Write((sbyte)channel);
             request.Serialize(writer, logger);
             writer.Flush();
-            lastActivity = DateTimeOffset.UtcNow;
+            lastRequestTime = DateTimeOffset.UtcNow;
             logger?.Log($"flushed on {channel}");
         }
         finally
@@ -92,7 +99,7 @@ public sealed class QAConnection : IDisposable
             writer.Write((sbyte)channel);
             response.Serialize(writer, logger);
             writer.Flush();
-            lastActivity = DateTimeOffset.UtcNow;
+            lastRequestTime = DateTimeOffset.UtcNow;
             logger?.Log($"flushed on {channel}");
         }
         finally
