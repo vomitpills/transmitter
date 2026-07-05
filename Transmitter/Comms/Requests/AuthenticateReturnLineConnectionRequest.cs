@@ -1,34 +1,33 @@
-﻿using Transmitter.Authentication;
-using Transmitter.Comms.Responses;
+﻿using Transmitter.Comms.Responses;
 
 namespace Transmitter.Comms.Requests;
 
-public sealed class AuthenticateReturnLineConnectionRequest : AuthenticatedRequest<AuthenticateReturnLineConnectionRequest>, IAuthenticatedRequest
+public sealed class AuthenticateFeedbackLineConnectionRequest : AuthenticatedRequest<AuthenticateFeedbackLineConnectionRequest>, IAuthenticatedRequest
 {
     static RequestIntention IAuthenticatedRequest.DescendantIntention { get; } = RequestIntention.Authenticate;
 
-    public Guid ReturnLineKey { get; }
+    public Guid FeedbackLineKey { get; }
 
-    public AuthenticateReturnLineConnectionRequest(ClientSecret clientSecret, Guid returnLineKey) : base(clientSecret)
+    public AuthenticateFeedbackLineConnectionRequest(ReadOnlyMemory<byte> clientAuth, Guid feedbackLineKey) : base(clientAuth)
     {
-        ReturnLineKey = returnLineKey;
+        FeedbackLineKey = feedbackLineKey;
     }
 
-    private AuthenticateReturnLineConnectionRequest(IDeserializationKey key, RequestIntention intention, ClientSecret clientSecret, Guid returnLineKey) : base(key, intention, clientSecret)
+    private AuthenticateFeedbackLineConnectionRequest(IDeserializationKey key, RequestIntention intention, ReadOnlyMemory<byte> clientAuth, Guid feedbackLineKey) : base(key, intention, clientAuth)
     {
-        ReturnLineKey = returnLineKey;
+        FeedbackLineKey = feedbackLineKey;
     }
 
-    static Request IAuthenticatedRequest.FinalizeDescendantDeserialization(BinaryReader reader, RequestIntention intention, ClientSecret clientSecret, IDeserializationKey key)
+    static Request IAuthenticatedRequest.FinalizeDescendantDeserialization(BinaryReader reader, RequestIntention intention, ReadOnlyMemory<byte> clientAuth, IDeserializationKey key)
     {
         Span<byte> guidBuffer = stackalloc byte[16];
         reader.ReadExactly(guidBuffer);
-        return new AuthenticateReturnLineConnectionRequest(key, intention, clientSecret, new(guidBuffer));
+        return new AuthenticateFeedbackLineConnectionRequest(key, intention, clientAuth, new(guidBuffer));
     }
 
     protected override void FinalizeDescendantSerialization(BinaryWriter writer)
     {
-        writer.Write(ReturnLineKey.ToByteArray());
+        writer.Write(FeedbackLineKey.ToByteArray());
     }
 
     static ResponseDeserializationFinalizer IAuthenticatedRequest.FinalizeDescendantResponseDeserialization(ResponsePayloadType responsePayloadType) => responsePayloadType switch

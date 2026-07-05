@@ -12,10 +12,13 @@ public enum RequestIntention : byte
 {
     KeepAlive,
     ObtainSecret,
-    ObtainReturnLineKey,
+    ObtainFeedbackLineKey,
+    ObtainReferrerKey,
     Authenticate,
-    SendMail,
-    AcknowledgeMailDelivery
+    RelayMessage,
+    RecordMail,
+    TransactionCompletionNotice,
+    ManageChat,
 }
 
 public abstract class Request : Message // this is atrocious
@@ -24,7 +27,7 @@ public abstract class Request : Message // this is atrocious
 
     protected Request() { }
 
-    public static Request BeginDeserialization(BinaryReader stream, Func<RequestIntention, RequestDeserializationFinalizer> finalizeFactory, Logger? logger = null)
+    public static Request BeginDeserialization(BinaryReader stream, Func<RequestIntention, RequestDeserializationFinalizer> finalizeFactory, ConnectionLogger? logger = null)
     {
         IDeserializationKey key = DeserializeRoot(stream);
 
@@ -47,7 +50,7 @@ public abstract class Request<T> : Request where T : IRequest
 
     protected Request() : base() { }
 
-    protected sealed override void SerializeDescendant(BinaryWriter writer, Logger? logger = null)
+    protected sealed override void SerializeDescendant(BinaryWriter writer, ConnectionLogger? logger = null)
     {
         logger?.Log($"Writing request ({nameof(T.Intention)}:{T.Intention})");
         writer.Write((byte)T.Intention);

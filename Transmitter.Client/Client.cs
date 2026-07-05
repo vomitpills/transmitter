@@ -1,84 +1,70 @@
 ﻿using System.Net;
 
-using Transmitter.Authentication;
 using Transmitter.Comms;
 using Transmitter.Comms.Gateways;
-using Transmitter.Comms.Requests;
-using Transmitter.Comms.Responses;
+using Transmitter.Security;
 
-namespace Transmitter.Client;
+namespace Transmitter.Client; 
 
-public partial class Client : Transceiver
+public partial class Client : Node  // rename to Node; Client should contain high level logic
 {
     private readonly PersistentClientState persistentState;
+    private readonly Dictionary<Guid, InstanceConnection> instanceConnections;
 
-    readonly TcpGateway gateway = new(new(IPAddress.Any, 0), new("CLIENT-GATEWAY"));
+    private Task? connectionManager;
 
     public Client(PersistentClientState state)
     {
         persistentState = state;
+        TcpGateway gateway = new(new(IPAddress.Any, 0), new("CLIENT-GATEWAY"));
         Mount(gateway);
         gateway.Start();
-    }
 
-    public async Task<IChat> ConnectToInstance(IPAddress address, ushort port, ushort returnLinePort, Guid inviteCode)
-    {
-        QAConnection connection = await EstablishInstanceConnection(new(address, port), Role.Client);
-        ClientSecret clientSecret = await ObtainClientSecret(connection, inviteCode);
-        return await ConnectToInstance(connection, new(address, returnLinePort), clientSecret);
-    }
-    public async Task<IChat> ConnectToInstance(IPAddress address, ushort port, ushort returnLinePort, ClientSecret clientSecret)
-    {
-        QAConnection connection = await EstablishInstanceConnection(new(address, port), Role.Client);
-        return await ConnectToInstance(connection, new(address, returnLinePort), clientSecret);
-    }
+        instanceConnections = persistentState.Instances.Select(i => (i.Key, InstanceConnection.Create(ConnectAsync, i.Value))).ToDictionary();
 
-    private async Task<Chat> ConnectToInstance(QAConnection connection, IPEndPoint returnLineEndpoint, ClientSecret clientSecret)
-    {
-        Guid returnLineKey = await GetReturnLineKey(connection, clientSecret);
-        QAConnection returnLineConnection = await EstablishInstanceConnection(returnLineEndpoint, Role.Server);
-        await AuthenticateCommConnection(connection, clientSecret);
-        await AuthenticateReturnLine(returnLineConnection, clientSecret, returnLineKey);
-        return new(connection, returnLineConnection, clientSecret);
-    }
-
-    private static async Task<ClientSecret> ObtainClientSecret(QAConnection connection, Guid inviteCode)
-    {
-        Response response = await connection.RequestAsync(new ObtainClientSecretRequest(inviteCode));
-        return response switch
+        connectionManager = Task.Run(async () =>
         {
-            ClientSecretResponse clientSecretResponse => clientSecretResponse.ClientSecret,
-            _ => throw new NotImplementedException()
-        };
+            foreach (var item in instanceConnections)
+                await item.Value.Start();
+        }); // bandaid
     }
 
-    private static async Task AuthenticateCommConnection(QAConnection connection, ClientSecret clientSecret)
+    public async Task AddInstance(InstanceInvite inviteCode)
     {
-        Response response = await connection.RequestAsync(new AuthenticateCommConnectionRequest(clientSecret));
-        if (response.Status is not RequestStatus.OK)
-            throw new NotImplementedException();
+        Guid guid = Guid.NewGuid();
+        (InstanceConnection connection, InstanceRegistration registration, HashedId? referrer) = await InstanceConnection.Create(ConnectAsync, inviteCode, persistentState.Profile);
+        persistentState.AddInstance(guid, registration);
+        if (referrer.HasValue)
+            persistentState.AddRecipient(registration.InstanceAddress, referrer.Value);
+        instanceConnections.Add(guid, connection);
     }
 
-    private static async Task AuthenticateReturnLine(QAConnection returnLineConnection, ClientSecret clientSecret, Guid returnLineKey)
+    public Task Relay(Request request, Guid chatId)
     {
-        Response response = await returnLineConnection.RequestAsync(new AuthenticateReturnLineConnectionRequest(clientSecret, returnLineKey));
-        if (response.Status is not RequestStatus.OK)
-            throw new NotImplementedException();
-    }
+        if (!persistentState.ChatMembers.TryGetValue(chatId, out var members))
+            throw new KeyNotFoundException($"No chat with id '{chatId}'");
 
-    private static async Task<Guid> GetReturnLineKey(QAConnection connection, ClientSecret clientSecret)
+        // make a WAL abt transaction
+
+        List<Task> tasks = [];
+        foreach (var item in members)
+        {
+            Task sendTask = Task.Run(() => Relay(request, persistentState.Recipients[item]));
+            tasks.Add(sendTask);
+        }
+        return Task.WhenAll(tasks);
+
+        // use a TaskCompletionSource; on any transaction: return & cancel others
+        // write to ledger. (here or by consumer?)
+        // this is very similar to the way transceivers function with gateways. some potential for abstraction here (is it worth it?)
+    }
+    
+    
+
+    public async Task<InstanceInvite> RequestInviteCode(Guid instance)
     {
-        Response response = await connection.RequestAsync(new ObtainReturnLineKeyRequest(clientSecret));
-        if (response is not GuidResponse guidResponse)
-            throw new NotImplementedException();
-        return guidResponse.Guid;
+        InstanceConnection instanceConnection = instanceConnections[instance];
+        Guid code = await instanceConnection.RequestInviteCode();
+        return new(instanceConnection.Registration.InstanceAddress, code);
     }
-
-    private Task<QAConnection> EstablishInstanceConnection(IPEndPoint endpoint, Role role) => ConnectAsync(() => gateway.InitiateConnectionAsync(endpoint, new(role, (short)TimeSpan.FromMinutes(3).TotalSeconds)));
-}
-
-public interface IChat : IDisposable
-{
-    public event Action<Transaction>? MailReceived;
-    public Task PostMail(Mail mail, Guid recipient);
 }

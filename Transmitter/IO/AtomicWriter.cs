@@ -44,7 +44,11 @@ public class AtomicWriter(string filePath) : IDisposable
             {
                 this.owner = owner;
                 this.tempFilePath = tempFilePath;
+#if DEBUG
+                tempStream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+#else
                 tempStream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+#endif
             }
             catch
             {
@@ -72,6 +76,7 @@ public class AtomicWriter(string filePath) : IDisposable
 
             if (disposing)
             {
+                tempStream.Flush();
                 tempStream.Dispose();
                 owner.FinalizeTransaction(this, tempFilePath);
                 semaphore.Release();

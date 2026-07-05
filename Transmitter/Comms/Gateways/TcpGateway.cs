@@ -3,20 +3,11 @@ using System.Net.Sockets;
 
 namespace Transmitter.Comms.Gateways;
 
-public class TcpGateway(IPEndPoint localEndPoint, Logger? logger = null) : Gateway
+public class TcpGateway(IPEndPoint localEndPoint, ConnectionLogger? logger = null) : Gateway<WebGatewayAddress>
 {
     private TcpListener Listener { get; } = new(localEndPoint);
     private Task? clientLoopTask;
     private Task? cancelClientLoopTask;
-
-    public async Task InitiateConnectionAsync(IPEndPoint endPoint, ConnectionOptions options, CancellationToken cancellationToken = default)
-    {
-        TcpClient client = new();
-        await client.ConnectAsync(endPoint);
-        LoggedStream loggerBinaryStream = new(client.GetStream(), logger?.CreateChild("STREAM") ?? new("unlabled"));
-        await OnOutgoing(new(loggerBinaryStream), options, cancellationToken);
-        await OnIncoming(new(loggerBinaryStream), cancellationToken);
-    }
 
     public override void Start()
     {
@@ -60,6 +51,15 @@ public class TcpGateway(IPEndPoint localEndPoint, Logger? logger = null) : Gatew
         if (clientLoopTask is null)
             throw new InvalidOperationException("Already stopped");
         cancelClientLoopTask!.Wait(); // prolly a bad idea
+    }
+
+    public override async Task InitiateConnection(WebGatewayAddress address, ConnectionOptions options, CancellationToken cancellationToken = default)
+    {
+        TcpClient client = new();
+        await client.ConnectAsync(address.IPEndPoint);
+        LoggedStream loggerBinaryStream = new(client.GetStream(), logger?.CreateChild("STREAM") ?? new("unlabled"));
+        await OnOutgoing(new(loggerBinaryStream), options, cancellationToken);
+        await OnIncoming(new(loggerBinaryStream), cancellationToken);
     }
 
     public override void Dispose() => GC.SuppressFinalize(this); // prolly a bad idea too

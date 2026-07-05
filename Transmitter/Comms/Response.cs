@@ -12,6 +12,7 @@ public enum RequestStatus : sbyte
     CACHED = 30,
 
     FAULTY_DATA = -10,
+    AUTH_FALT = -15,
     MALFORMED_REQUEST = -20,
     TEAPOT = -25,
     PROTOCOL_VERSION_MISMATCH = -40,
@@ -21,7 +22,7 @@ public enum ResponsePayloadType : byte
 {
     Empty,
     Guid,
-    ClientSecret
+    AuthKeyAndReferrer
 }
 
 public abstract class Response : Message
@@ -34,7 +35,7 @@ public abstract class Response : Message
 
     protected Response() : base() { }
 
-    public static Response BeginDeserialization(BinaryReader reader, Func<ResponsePayloadType, ResponseDeserializationFinalizer> deserializeFinishChooser, Logger? logger = null)
+    public static Response BeginDeserialization(BinaryReader reader, Func<ResponsePayloadType, ResponseDeserializationFinalizer> deserializeFinishChooser, ConnectionLogger? logger = null)
     {
         IDeserializationKey key = DeserializeRoot(reader);
 
@@ -64,7 +65,7 @@ public abstract class Response<T> : Response where T : Response<T>, IResponse
 
     protected Response() : base() { }
 
-    protected sealed override void SerializeDescendant(BinaryWriter writer, Logger? logger = null)
+    protected sealed override void SerializeDescendant(BinaryWriter writer, ConnectionLogger? logger = null)
     {
         logger?.Log($"Writing response ({nameof(Status)}:{Status} {nameof(T.PayloadType)}:{T.PayloadType})");
         writer.Write(unchecked((byte)Status));

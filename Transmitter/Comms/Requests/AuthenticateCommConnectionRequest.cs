@@ -1,5 +1,4 @@
-﻿using Transmitter.Authentication;
-using Transmitter.Comms.Responses;
+﻿using Transmitter.Comms.Responses;
 
 namespace Transmitter.Comms.Requests;
 
@@ -7,12 +6,12 @@ public sealed class AuthenticateCommConnectionRequest : AuthenticatedRequest<Aut
 {
     static RequestIntention IAuthenticatedRequest.DescendantIntention { get; } = RequestIntention.Authenticate;
 
-    public AuthenticateCommConnectionRequest(ClientSecret clientSecret) : base(clientSecret) { }
+    public AuthenticateCommConnectionRequest(ReadOnlyMemory<byte> clientAuth) : base(clientAuth) { }
 
-    private AuthenticateCommConnectionRequest(IDeserializationKey key, RequestIntention intention, ClientSecret clientSecret) : base(key, intention, clientSecret) { }
+    private AuthenticateCommConnectionRequest(IDeserializationKey key, RequestIntention intention, ReadOnlyMemory<byte> clientAuth) : base(key, intention, clientAuth) { }
 
-    static Request IAuthenticatedRequest.FinalizeDescendantDeserialization(BinaryReader reader, RequestIntention intention, ClientSecret clientSecret, IDeserializationKey key)
-        => new AuthenticateCommConnectionRequest(key, intention, clientSecret);
+    static Request IAuthenticatedRequest.FinalizeDescendantDeserialization(BinaryReader reader, RequestIntention intention, ReadOnlyMemory<byte> clientAuth, IDeserializationKey key)
+        => new AuthenticateCommConnectionRequest(key, intention, clientAuth);
 
     protected override void FinalizeDescendantSerialization(BinaryWriter writer) { }
 

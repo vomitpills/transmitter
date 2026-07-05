@@ -1,6 +1,12 @@
 <Solution>
   <Project Path="CLI/CLI.csproj" Id="b58bea99-f945-4a25-8348-c82aca772b56" />
   <Project Path="Transmitter.Client/Transmitter.Client.csproj" />
+  <Project Path="Transmitter.Doohickeys/Transmitter.Doohickeys.csproj" />
   <Project Path="Transmitter.Instance/Transmitter.Instance.csproj" />
   <Project Path="Transmitter/Transmitter.csproj" />
+  <Project Path="UI/UI.Android/UI.Android.csproj" Id="cd9411cf-9395-4f18-9673-1c7dcdfd8974" />
+  <Project Path="UI/UI.Browser/UI.Browser.csproj" Id="86a7a781-5c1e-40db-b001-7fa5e5bef7f1" />
+  <Project Path="UI/UI.Desktop/UI.Desktop.csproj" Id="d9bec0ce-cefd-4e79-aed1-13bc05a60ed0" />
+  <Project Path="UI/UI.iOS/UI.iOS.csproj" Id="aabea4bf-1a37-43a8-bde1-ccde56ad04a1" />
+  <Project Path="UI/UI/UI.csproj" Id="8f592c29-39c2-4505-96a0-e385c43aa11c" />
 </Solution>

@@ -1,5 +1,6 @@
 ﻿using Transmitter.Comms.Requests;
 using Transmitter.Comms.Responses;
+using Transmitter.IO;
 
 namespace Transmitter.Comms.Gateways;
 
@@ -7,7 +8,7 @@ public sealed class QAConnection : IDisposable
 {
     private readonly BinaryWriter writer;
     private readonly BinaryReader reader;
-    private readonly Logger? logger;
+    private readonly ConnectionLogger? logger;
 
     private readonly SemaphoreSlim writeSemaphore = new(1, 1);
     private readonly CancellationTokenSource bgTasksCancellation = new();
@@ -18,7 +19,7 @@ public sealed class QAConnection : IDisposable
 
     private DateTimeOffset lastRequestTime;
 
-    public QAConnection(ConnectionOptions connectionOptions, BinaryWriter writer, BinaryReader reader, Logger? logger = null)
+    public QAConnection(ConnectionOptions connectionOptions, BinaryWriter writer, BinaryReader reader, ConnectionLogger? logger = null)
     {
         this.writer = writer;
         this.reader = reader;

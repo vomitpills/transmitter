@@ -2,16 +2,16 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 
-using Transmitter.Authentication;
 using Transmitter.Comms;
+using Transmitter.IO;
+using Transmitter.Security;
 
 namespace Transmitter.Instance;
 
 internal sealed class Peer : ISerializable<Peer>
 {
-    public ClientSecret Auth { get; }
-    public Guid Id { get; }
-    public Profile? Profile
+    public HashedId Passcode { get; }
+    public Profile Profile
     {
         get;
         set
@@ -31,12 +31,11 @@ internal sealed class Peer : ISerializable<Peer>
     public Channel<Transaction> Backlog { get; }
     public SemaphoreSlim MutateSemaphore { get; } = new(1);
 
-    public Peer(ClientSecret auth, Profile? profile) : this(auth, Guid.NewGuid(), profile, []) { }
+    public Peer(HashedId auth, Profile profile) : this(auth, profile, []) { }
 
-    private Peer(ClientSecret auth, Guid id, Profile? profile, IEnumerable<Transaction> backlog)
+    private Peer(HashedId passcode, Profile profile, IEnumerable<Transaction> backlog)
     {
-        Auth = auth;
-        Id = id;
+        Passcode = passcode;
         Profile = profile;
         Backlog = Channel.CreateUnbounded<Transaction>();
         foreach (var transaction in backlog)
@@ -49,22 +48,15 @@ internal sealed class Peer : ISerializable<Peer>
         MutateSemaphore.Wait();
         try
         {
-            Auth.Serialize(writer);
-            writer.Write(Id.ToByteArray());
-            if (Profile is not null)
-            {
-                writer.Write((byte)1);
-                Profile.Serialize(writer);
-            }
-            else
-                writer.Write((byte)0);
+            Passcode.SerializeHash(writer);
+            Profile.Serialize(writer);
 
             ushort count = (ushort)Backlog.Reader.Count;
             writer.Write(count);
             Transaction[] buffer = new Transaction[count];
             for (int i = 0; i < count; i++)
             {
-                if (!Backlog.Reader.TryRead(out Transaction? transaction))
+                if (!Backlog.Reader.TryRead(out Transaction transaction))
                     throw new InvalidOperationException();
                 buffer[i] = transaction;
                 transaction.Serialize(writer);
@@ -81,54 +73,81 @@ internal sealed class Peer : ISerializable<Peer>
 
     public static Peer Deserialize(BinaryReader reader)
     {
-        ClientSecret auth = ClientSecret.Deserialize(reader);
+        HashedId passcode = HashedId.DeserializeHash(reader);
 
-        Span<byte> idBuffer = stackalloc byte[16];
-        reader.ReadExactly(idBuffer);
-        Guid id = new(idBuffer);
-
-        bool hasProfile = reader.ReadByte() is 1;
-        Profile? profile = hasProfile? Profile.Deserialize(reader) : null;
+        Profile profile = Profile.Deserialize(reader);
 
         ushort backlogCount = reader.ReadUInt16();
         Transaction[] backlog = new Transaction[backlogCount];
         for (int i = 0; i < backlogCount; i++)
             backlog[i] = Transaction.Deserialize(reader);
 
-        return new(auth, id, profile, backlog);
+        return new(passcode, profile, backlog);
     }
 
-    public event Action<Profile?>? ProfileUpdated;
+    public event Action<Profile>? ProfileUpdated;
 }
 
-internal sealed class PeerCollection : IEnumerable<Peer>
+internal sealed class PeerCollection : IEnumerable<Peer>, ISerializable<PeerCollection>
 {
-    private readonly Dictionary<Guid, Peer> idToPeer = [];
-    private readonly Dictionary<ClientSecret, Peer> authToPeer = [];
+    private readonly List<Peer> peers = [];
 
-    public Peer this[Guid id] => idToPeer[id];
-    public Peer this[ClientSecret auth] => authToPeer[auth];
+    public PeerCollection() { }
 
-    public bool TryGet(Guid id, [NotNullWhen(true)] out Peer? peer) => idToPeer.TryGetValue(id, out peer);
-    public bool TryGet(ClientSecret clientSecret, [NotNullWhen(true)] out Peer? peer) => authToPeer.TryGetValue(clientSecret, out peer);
+    private PeerCollection(IEnumerable<Peer> peers)
+    {
+        this.peers = [.. peers];
+    }
 
-    public int Count => idToPeer.Count;
+    private Peer? TryGetPeer(HashedId passcode) => peers.SingleOrDefault(p => p.Passcode == passcode);
 
-    public event Action<Peer>? ProfileUpdated;
+    public Peer this[HashedId passcode] => TryGetPeer(passcode) ?? throw new KeyNotFoundException();
+
+    public bool TryGet(HashedId peerId, [NotNullWhen(true)] out Peer? peer)
+    {
+        if (TryGetPeer(peerId) is Peer retrieved)
+        {
+            peer = retrieved;
+            return true;
+        }
+        peer = null;
+        return false;
+    }
+
+    public bool TryGet(ReadOnlySpan<byte> authKey, [NotNullWhen(true)] out Peer? peer) => TryGet(HashedId.FromKey(authKey), out peer);
+
+    public int Count => peers.Count;
+
+    public event Action<Peer, Profile>? ProfileUpdated;
     public event Action<Peer>? PeerAdded;
 
     public void Add(Peer peer)
     {
-        idToPeer[peer.Id] = peer;
-        authToPeer[peer.Auth] = peer;
+        peers.Add(peer);
 
-        peer.ProfileUpdated += (_) => ProfileUpdated?.Invoke(peer);
+        peer.ProfileUpdated += (profile) => ProfileUpdated?.Invoke(peer, profile);
         PeerAdded?.Invoke(peer);
     }
 
-    public bool Exists(Guid id) => idToPeer.ContainsKey(id);
-    public bool Exists(ClientSecret auth) => authToPeer.ContainsKey(auth);
+    public bool Exists(HashedId peerId) => peers.Exists(p => p.Passcode == peerId);
+    public bool Exists(ReadOnlySpan<byte> auth) => Exists(HashedId.FromKey(auth));
 
-    public IEnumerator<Peer> GetEnumerator() => idToPeer.Values.GetEnumerator();
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)Count);
+        foreach (var peer in peers)
+            peer.Serialize(writer);
+    }
+
+    public static PeerCollection Deserialize(BinaryReader reader)
+    {
+        byte peersCount = reader.ReadByte();
+        Peer[] peers = new Peer[peersCount];
+        for (int i = 0; i < peersCount; i++)
+            peers[i] = Peer.Deserialize(reader);
+        return [.. peers];
+    }
+
+    public IEnumerator<Peer> GetEnumerator() => peers.GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

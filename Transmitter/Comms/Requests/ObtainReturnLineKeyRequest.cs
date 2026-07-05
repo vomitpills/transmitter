@@ -1,17 +1,16 @@
-﻿using Transmitter.Authentication;
-using Transmitter.Comms.Responses;
+﻿using Transmitter.Comms.Responses;
 
 namespace Transmitter.Comms.Requests;
 
-public sealed class ObtainReturnLineKeyRequest : AuthenticatedRequest<ObtainReturnLineKeyRequest>, IAuthenticatedRequest
+public sealed class ObtainFeedbackLineKeyRequest : AuthenticatedRequest<ObtainFeedbackLineKeyRequest>, IAuthenticatedRequest
 {
-    static RequestIntention IAuthenticatedRequest.DescendantIntention { get; } = RequestIntention.ObtainReturnLineKey;
+    static RequestIntention IAuthenticatedRequest.DescendantIntention { get; } = RequestIntention.ObtainFeedbackLineKey;
     
-    public ObtainReturnLineKeyRequest(ClientSecret clientSecret) : base(clientSecret) { }
+    public ObtainFeedbackLineKeyRequest(ReadOnlyMemory<byte> clientAuth) : base(clientAuth) { }
 
-    private ObtainReturnLineKeyRequest(IDeserializationKey key, RequestIntention intention, ClientSecret clientSecret) : base(key, intention, clientSecret) { }
+    private ObtainFeedbackLineKeyRequest(IDeserializationKey key, RequestIntention intention, ReadOnlyMemory<byte> clientAuth) : base(key, intention, clientAuth) { }
 
-    static Request IAuthenticatedRequest.FinalizeDescendantDeserialization(BinaryReader reader, RequestIntention intention, ClientSecret clientSecret, IDeserializationKey key) => new ObtainReturnLineKeyRequest(key, intention, clientSecret);
+    static Request IAuthenticatedRequest.FinalizeDescendantDeserialization(BinaryReader reader, RequestIntention intention, ReadOnlyMemory<byte> clientAuth, IDeserializationKey key) => new ObtainFeedbackLineKeyRequest(key, intention, clientAuth);
 
     static ResponseDeserializationFinalizer IAuthenticatedRequest.FinalizeDescendantResponseDeserialization(ResponsePayloadType responsePayloadType) => responsePayloadType switch
     {

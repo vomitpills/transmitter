@@ -2,26 +2,33 @@
 
 namespace Transmitter;
 
-public class Logger(string name, ConsoleColor? color = null)
+public class ConnectionLogger(string name, ConsoleColor? color = null)
 {
-    private static readonly ConsoleColor[] validColors = [ConsoleColor.Green, ConsoleColor.Magenta, ConsoleColor.Blue, ConsoleColor.Cyan];
+    private static readonly ConsoleColor[] validColors = [ConsoleColor.Green, ConsoleColor.Magenta, ConsoleColor.Blue, ConsoleColor.Cyan, ConsoleColor.Yellow];
 
     public string Name { get; } = name;
 
+    private static readonly bool enabled;
     private string NameDecoratedPadded => $"[{Name}]".PadRight(10);
     private ConsoleColor Color => color ?? StringToColor(Name);
 
     private static ConsoleColor StringToColor(string text) => validColors[int.Abs(text.GetHashCode()) % validColors.Length];
 
-    static Logger()
+    static ConnectionLogger()
     {
         Console.OutputEncoding = Encoding.UTF8;
         Console.CursorVisible = false;
+
+#if ENABLE_LOGGING
+        enabled = true;
+#else
+        enabled = false;
+#endif
     }
 
     public void Log(string message) => Write(message);
 
-    public Logger CreateChild(string? childName = null, bool addPostfix = true)
+    public ConnectionLogger CreateChild(string? childName = null, bool addPostfix = true)
     {
         string name = Name;
         if (childName is not null)
@@ -35,6 +42,9 @@ public class Logger(string name, ConsoleColor? color = null)
 
     private void Write(string message, ConsoleColor? foreground = null, ConsoleColor? background = null, bool decorateName = true)
     {
+        if (!enabled)
+            return;
+
         DateTime timestamp = DateTime.Now;
         writeSemaphore.Wait();
         try

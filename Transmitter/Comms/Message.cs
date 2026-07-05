@@ -12,7 +12,7 @@ public abstract class Message
 
     protected Message() { }
 
-    public void Serialize(BinaryWriter writer, Logger? logger = null)
+    public void Serialize(BinaryWriter writer, ConnectionLogger? logger = null)
     {
         SerializeDescendant(writer, logger);
     }
@@ -22,7 +22,7 @@ public abstract class Message
         return new MessageDeserializationKey();
     }
 
-    protected abstract void SerializeDescendant(BinaryWriter writer, Logger? logger = null);
+    protected abstract void SerializeDescendant(BinaryWriter writer, ConnectionLogger? logger = null);
 
     private record class MessageDeserializationKey() : IDeserializationKey;
 }

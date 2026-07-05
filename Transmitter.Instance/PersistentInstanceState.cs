@@ -1,83 +1,83 @@
-﻿using Transmitter.Authentication;
-using Transmitter.Comms;
+﻿using Transmitter.Comms;
+using Transmitter.Security;
 
 namespace Transmitter.Instance;
 
 public sealed partial class PersistentInstanceState
 {
-    private HashSet<Guid> ValidInvites { get; init; } = [];
+    private Dictionary<Guid, HashedId?> ValidInvites { get; init; } = [];
     private PeerCollection Peers { get; init; } = [];
 
-    public Guid EmitInviteCode()
+    public bool TryEmitInviteCode(ReadOnlySpan<byte> auth, out Guid inviteCode)
+    {
+        if (!Authenticate(auth, out HashedId peer))
+        {
+            inviteCode = default;
+            return false;
+        }
+        inviteCode = Guid.NewGuid();
+        ValidInvites.Add(inviteCode, peer);
+        Save();
+        return true;
+    }
+
+    public Guid EmitUnboundInviteCode()
     {
         Guid inviteCode = Guid.NewGuid();
-        ValidInvites.Add(inviteCode);
+        ValidInvites.Add(inviteCode, null);
         Save();
         return inviteCode;
     }
 
-    public bool TryRegisterUser(Guid inviteCode, out ClientSecret clientSecret)
+    public bool TryRegisterUser(Guid inviteCode, Profile profile, out ReadOnlySpan<byte> auth, out HashedId? referrer)
     {
-        if (ValidInvites.Remove(inviteCode))
+        if (!ValidInvites.Remove(inviteCode, out referrer))
         {
-            Save();
-            clientSecret = ClientSecret.Emit();
-            Peers.Add(new(clientSecret, null));
-            Save();
-            return true;
-        }
-        clientSecret = default;
-        return false;
-    }
-
-    public Profile? GetProfile(Guid id) => Peers[id].Profile;
-    public Profile? GetProfile(ClientSecret auth) => Peers[auth].Profile;
-
-    public Guid GetId(ClientSecret auth) => Peers[auth].Id;
-    public bool TryGetId(ClientSecret auth, out Guid guid)
-    {
-        if (!Peers.TryGet(auth, out Peer? peer))
-        {
-            guid = default;
+            auth = default;
             return false;
         }
-        guid = peer.Id;
+        auth = HashedId.Emit(out HashedId passcode);
+        Peers.Add(new(passcode, profile));
+        //RecordPendingTransaction();
+        Save();
         return true;
     }
 
-    public void UpdateProfile(ClientSecret auth, Profile profile)
+    public Profile GetProfile(HashedId passcode) => Peers[passcode].Profile;
+
+    public bool Authenticate(ReadOnlySpan<byte> auth, out HashedId peer)
+    {
+        peer = HashedId.FromKey(auth);
+        return UserExists(peer);
+    }
+
+    public void UpdateProfile(HashedId auth, Profile profile)
     {
         Peers[auth].Profile = profile;
         Save();
     }
 
-    public bool UserExists(Guid id) => Peers.Exists(id);
-    public bool UserExists(ClientSecret auth) => Peers.Exists(auth);
+    public bool UserExists(HashedId auth) => Peers.Exists(auth);
 
-    public bool RecordPendingTransaction(Transaction transaction, Guid receiver)
+    public async Task RecordPendingTransaction(Transaction transaction, HashedId recipient)
     {
-        Peer peer = Peers[receiver];
-        peer.MutateSemaphore.Wait();
-        bool success = false;
+        Peer recipientPeer = Peers[recipient];
+        recipientPeer.MutateSemaphore.Wait();
         try
         {
-            success = peer.Backlog.Writer.TryWrite(transaction);
+            await recipientPeer.Backlog.Writer.WriteAsync(transaction);
         }
         finally
         {
-            peer.MutateSemaphore.Release();
+            recipientPeer.MutateSemaphore.Release();
         }
-
-        if (success)
-            Save();
-
-        return success;
+        Save();
     }
 
-    public async Task<Transaction> PeekTransactionQueue(Guid receiver, CancellationToken cancellationToken = default)
+    public async Task<Transaction> PeekTransactionQueue(HashedId receiver, CancellationToken cancellationToken = default)
     {
         Peer peer = Peers[receiver];
-        Transaction? transaction;
+        Transaction transaction;
         do
         {
             await peer.Backlog.Reader.WaitToReadAsync(cancellationToken);
@@ -86,7 +86,7 @@ public sealed partial class PersistentInstanceState
         return transaction;
     }
 
-    public void AdvanceTransactionQueue(Guid receiver)
+    public void AdvanceTransactionQueue(HashedId receiver)
     {
         Peer peer = Peers[receiver];
         peer.MutateSemaphore.Wait();
@@ -102,5 +102,5 @@ public sealed partial class PersistentInstanceState
         Save();
     }
 
-    public IEnumerable<Guid> EnumerateKnownIds() => Peers.Select(p => p.Id);
+    //public IEnumerable<Guid> EnumerateKnownIds() => Peers.Select(p => p.Id);
 }

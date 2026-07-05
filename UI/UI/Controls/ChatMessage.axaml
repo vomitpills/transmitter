@@ -1,0 +1,108 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="using:UI.Controls"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="using:UI"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="UI.Controls.ChatMessage"
+             xmlns:vm="using:UI.ViewModels"
+             x:DataType="vm:ChatMessageViewModel">
+
+    <UserControl.DataContext>
+        <vm:ChatMessageViewModel/>
+    </UserControl.DataContext>
+
+    <UserControl.Styles>
+        <Style Selector="Grid.loading-overlay">
+            <Style.Animations>
+                <Animation Duration="00:00:01" Easing="ExponentialEaseOut" IterationCount="Infinite" PlaybackBehavior="OnlyIfVisible" PlaybackDirection="AlternateReverse">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Background" Value="Gray"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Background" Value="LightGray"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
+
+        <!-- inner styles -->
+        <Style Selector="local|ChatMessage">
+
+            <!-- collapsible -->
+            <Style Selector="^[CollapseInfo=true] :is(Visual).collapsible">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            
+            <!-- yes IsMyMessage -->
+            <Style Selector="^[IsMyMessage=true]">
+                <Style Selector="^ :is(Layoutable).align-horizontal">
+                    <Setter Property="HorizontalAlignment" Value="Right"/>
+                </Style>
+                <Style Selector="^ :is(TextBlock).justify">
+                    <Setter Property="TextAlignment" Value="Right"/>
+                </Style>
+                <Style Selector="^ DockPanel :is(Control).dock">
+                    <Setter Property="DockPanel.Dock" Value="Right"/>
+                </Style>
+                <Style Selector="^ :is(Decorator).msg-body">
+                    <Setter Property="Padding" Value="9, 7, 22, 7"/>
+                    <Setter Property="Margin" Value="0, 0, -20, 0"/>
+                </Style>
+            </Style>
+
+            <!-- no IsMyMessage -->
+            <Style Selector="^[IsMyMessage=false]">
+                <Style Selector="^ :is(Layoutable).align-horizontal">
+                    <Setter Property="HorizontalAlignment" Value="Left"/>
+                </Style>
+                <Style Selector="^ :is(TextBlock).justify">
+                    <Setter Property="TextAlignment" Value="Left"/>
+                </Style>
+                <Style Selector="^ DockPanel :is(Control).dock">
+                    <Setter Property="DockPanel.Dock" Value="Left"/>
+                </Style>
+                <Style Selector="^ :is(Decorator).msg-body">
+                    <Setter Property="Padding" Value="22, 7, 9, 7"/>
+                    <Setter Property="Margin" Value="-20, 0, 0, 0"/>
+                </Style>
+            </Style>
+        </Style>
+    </UserControl.Styles>
+
+  <DockPanel Classes="align-horizontal" VerticalAlignment="Center">
+        <Viewbox Name="PfpViewbox" Width="56" ZIndex="1"
+                 Classes="dock collapsible"
+                 Margin="0, -10, 0, 0">
+            <Grid>
+                <Image Source="avares://UI/Assets/test1.jpg" Stretch="UniformToFill" Width="256" Height="256"/>
+
+                <Grid.Clip>
+                    <EllipseGeometry Rect="0,0,256,256"/>
+                </Grid.Clip>
+            </Grid>
+        </Viewbox>
+
+        <TextBlock Name="UsernameTextBlock" Text="{Binding SenderProfile.DisplayName, Mode=OneWay}"
+                    Foreground="#FFA100"
+                    VerticalAlignment="Bottom"
+                    DockPanel.Dock="Top"
+                    Classes="align-horizontal"/>
+
+        <Border BorderBrush="#FFA100" Background="#F29E18" CornerRadius="10" BorderThickness="2" Classes="msg-body">
+            <StackPanel Spacing="4">
+                <TextBlock Foreground="White" Classes="justify">
+                    <Run Text="всё круто ставлю лайк"/>
+                    <InlineUIContainer BaselineAlignment="Center">
+                        <Viewbox Height="{Binding $parent.FontSize, Converter={x:Static ui:MathAddConverter.Instance}, ConverterParameter=5}">
+                            <Image Source="avares://UI/Assets/king.png"/>
+                        </Viewbox>
+                    </InlineUIContainer>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+   </DockPanel>
+
+</UserControl>

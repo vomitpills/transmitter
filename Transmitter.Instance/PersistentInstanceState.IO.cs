@@ -1,10 +1,11 @@
 ﻿using System.Text;
 
 using Transmitter.IO;
+using Transmitter.Security;
 
 namespace Transmitter.Instance;
 
-partial class PersistentInstanceState : IDisposable // move shared logic into an abstract class
+partial class PersistentInstanceState : IDisposable
 {
     private const ushort FORMAT_VERSION = 0;
 
@@ -13,7 +14,7 @@ partial class PersistentInstanceState : IDisposable // move shared logic into an
     private PersistentInstanceState(string filePath)
     {
         atomicWriter = new(filePath);
-        Peers.ProfileUpdated += (_) => Save();
+        Peers.ProfileUpdated += (_, _) => Save();
         Peers.PeerAdded += (_) => Save();
     }
 
@@ -37,11 +38,19 @@ partial class PersistentInstanceState : IDisposable // move shared logic into an
         
         writer.Write((byte)ValidInvites.Count);
         foreach (var inviteCode in ValidInvites)
-            writer.Write(inviteCode.ToByteArray());
+        {
+            writer.Write(inviteCode.Key.ToByteArray());
+            if (inviteCode.Value is HashedId referer)
+            {
+                writer.Write(true);
+                referer.SerializeHash(writer);
+            }
+            else
+                writer.Write(false);
+        }
 
-        writer.Write((byte)Peers.Count);
-        foreach (var peer in Peers)
-            peer.Serialize(writer);
+        Peers.Serialize(writer);
+        writer.Flush();
     }
 
     private static PersistentInstanceState Load(string filePath)
@@ -53,19 +62,22 @@ partial class PersistentInstanceState : IDisposable // move shared logic into an
             throw new InvalidOperationException("Format version mismatch");
 
         byte validInvitesLength = (byte)stream.ReadByte();
-        Guid[] validInvites = new Guid[validInvitesLength];
+        Dictionary<Guid, HashedId?> validInvites = [];
+        Span<byte> guidBuffer = stackalloc byte[16]; // scary!
         for (int i = 0; i < validInvitesLength; i++)
-            validInvites[i] = new(reader.ReadBytes(16));
+        {
+            reader.ReadExactly(guidBuffer);
+            Guid guid = new(guidBuffer);
+            HashedId? referer = reader.ReadBoolean()? HashedId.DeserializeHash(reader) : null;
+            validInvites[guid] = referer;
+        }
 
-        byte peersCount = (byte)stream.ReadByte();
-        Peer[] peers = new Peer[peersCount];
-        for (int i = 0; i < peersCount; i++)
-            peers[i] = Peer.Deserialize(reader);
-        
+        PeerCollection peers = PeerCollection.Deserialize(reader);
+
         return new(filePath)
         {
-            ValidInvites = [.. validInvites],
-            Peers = [.. peers]
+            ValidInvites = validInvites,
+            Peers = peers
         };
     }
 
