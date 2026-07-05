@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CLI\CLI.csproj" />
     <ProjectReference Include="..\Transmitter\Transmitter.csproj" />
   </ItemGroup>
 

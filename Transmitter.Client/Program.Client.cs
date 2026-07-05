@@ -1,19 +1,17 @@
-﻿using System.Net;
+﻿using CLI;
 
+using Transmitter.Comms;
 using Transmitter.Comms.MailContents;
+using Transmitter.Comms.Requests;
 
 namespace Transmitter.Client;
 
-internal static class Program
+internal static partial class Program
 {
 #if DEBUG
-    private const string SAVE_FILE_NAME = "config-03-dev";
-    private const ushort port = 57171;
-    private const ushort returnLinePort = 57172;
+    private const string SAVE_FILE_NAME = "config-04-dev";
 #else
-    private const string SAVE_FILE_NAME = "config-03";
-    private const ushort port = 57181;
-    private const ushort returnLinePort = 57182;
+    private const string SAVE_FILE_NAME = "config-04";
 #endif
 
     private const int RECONNECT_ATTEMPTS = 5;
@@ -21,36 +19,176 @@ internal static class Program
 
     public static async Task Main()
     {
-        PersistentClientState state = PersistentClientState.LoadOrCreate(Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "transmitter", SAVE_FILE_NAME));
+        PersistentClientState state = PersistentClientState.FromPath(Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "transmitter", SAVE_FILE_NAME), Profile.RandomProfile);
         Client client = new(state);
 
-        Guid inviteCode = Guid.Parse(Console.ReadLine()!);
-        IChat chat = await client.ConnectToInstance(IPAddress.Loopback, port, returnLinePort, inviteCode);
+        Console.WriteLine();
+        Logger.EnableInput();
 
-        Logger temp = new("client");
+        Guid? selectedChatOrUser = default;
+        bool isUserSelected = default;
 
-        Console.WriteLine("press 'r' to start receiving");
-        bool isReceiving = Console.ReadKey(true).Key is ConsoleKey.R;
+        PrintHelp();
+        PrintChats(state, selectedChatOrUser, isUserSelected);
+        PrintInstances(state);
 
-        if (isReceiving)
+        while (true)
         {
-            chat.MailReceived += (transaction) =>
+            if (Logger.LogInput(Console.ReadKey(true)) is not string message)
+                continue;
+            try
             {
-                string msg = $"({transaction.GetType()})";
-                foreach (var item in transaction.Mail.Content)
-                    msg += $" [{item.GetType()}:{item}]";
-                temp.Log(msg);
-            };
-            await Task.Delay(Timeout.Infinite);
+                (selectedChatOrUser, isUserSelected) = await Execute(state, client, selectedChatOrUser, isUserSelected, message);
+            }
+            catch (Exception e)
+            {
+                Logger.LogInputError(e.Message, e.GetType().ToString());
+            }
+        }
+    }
+
+    private static async Task<(Guid? selectedChatOrUser, bool isUserSelected)> Execute(PersistentClientState state, Client client, Guid? selectedChatOrUser, bool isUserSelected, string message)
+    {
+        string[] split = message.Split();
+        string[] args = [.. split.Skip(1)];
+        switch (split.FirstOrDefault(string.Empty).ToLowerInvariant())
+        {
+            case "@emit":
+            {
+                if (args.Length is not 1 || !Guid.TryParse(args[0], out Guid guid))
+                    throw new ArgumentOutOfRangeException(nameof(message));
+                InstanceInvite code = await client.RequestInviteCode(guid);
+                PrintCommandOutput(code.ToString());
+            }
+            break;
+
+            case "@map":
+            {
+                if (args.Length is not 0)
+                    throw new ArgumentOutOfRangeException(nameof(message));
+                throw new NotImplementedException();
+            }
+            //break;
+
+            case "@redeem":
+            {
+                if (args.Length is not 1)
+                    throw new ArgumentOutOfRangeException(nameof(message));
+                InstanceInvite instanceInvite = InstanceInvite.FromString(args[0]);
+                await client.AddInstance(instanceInvite);
+                PrintInstances(state);
+                PrintChats(state, selectedChatOrUser, isUserSelected);
+            }
+            break;
+
+            case "@switch":
+            {
+                if (args.Length is not 1)
+                    throw new ArgumentOutOfRangeException(nameof(message));
+
+                if (!Guid.TryParse(args[0], out Guid guid))
+                    throw new ArgumentOutOfRangeException(nameof(message));
+
+                selectedChatOrUser = guid;
+                bool userExists = state.Recipients.ContainsKey(guid);
+                bool chatExists = state.ChatMembers.ContainsKey(guid);
+                if (userExists ^ chatExists)
+                    isUserSelected = userExists;
+                else
+                    throw new InvalidOperationException($"Error processing guid: '{nameof(userExists)}:{userExists}' nor '{nameof(chatExists)}:{chatExists}' matched an id or are identical");
+            }
+            break;
+
+            //case "@make":
+            //{
+
+            //}
+            //break;
+
+            case "@help":
+            {
+                if (args.Length is not 0)
+                    throw new ArgumentOutOfRangeException(nameof(message));
+                PrintHelp();
+            }
+            break;
+
+            case "@profile":
+            {
+                Logger.DisableInput();
+                Logger.Reset();
+
+                Profile? profile = await SetupProfile(state.Profile);
+                if (profile is not null)
+                {
+                    // apply
+                }
+                Logger.EnableInput();
+            }
+            break;
+
+            default:
+            {
+                if (selectedChatOrUser is not Guid guid)
+                {
+                    Logger.LogInputError("No one to send message to");
+                    break;
+                }
+
+                Mail mail = new(state.Profile, new TextMailContent(message));
+                RecordMailRequest request = new(mail, 0); // todo
+                if (isUserSelected)
+                    await client.Relay(request, state.Recipients[guid]);
+                else
+                    await client.Relay(request, guid);
+            }
+            break;
+        }
+
+        return (selectedChatOrUser, isUserSelected);
+    }
+
+    private static void PrintHelp()
+        => Logger.LogNote(null,"""
+                               @REDEEM <invite code>       redeem invite code and add the instance
+                               @EMIT   <instance id>       request a new invite code from specified instance
+                               @SWITCH <chat id|user id>   switch chats
+                               @MAKE <[user id ..]>        create new chat
+                               @HELP                       show this text
+                               """);
+                               //@PROFILE                    configure profile
+                               //@MAP                        show map of connections
+    private static void PrintChats(PersistentClientState state, Guid? selectedChatOrUser, bool isUserSelected)
+    {
+        if (state.Recipients.Count <= 0)
+        {
+            Logger.LogNote(null, "NO AVAILABLE CHATS");
+            return;
         }
         else
-            while (true)
-            {
-                Console.Write("msg: ");
-                string message = Console.ReadLine()!;
-                Console.Write("rid: ");
-                Guid guid = Guid.Parse(Console.ReadLine()!);
-                await chat.PostMail(new(new TextMailContent(message)), guid);
-            }
+            Logger.LogNote(null, "AVAILABLE CHATS:");
+        if (state.ChatMembers.Count > 0)
+            Logger.LogNote("GROUPS", FormatAsList(state.ChatMembers.Select(k => $"{k.Key} ({string.Join(", ", k.Value)})")));
+        if (state.Recipients.Count > 0)
+            Logger.LogNote("USERS", FormatAsList(state.Recipients.Keys));
+        string message = selectedChatOrUser is null? "NO CHAT SELECTED" : $"NOW IN: {(isUserSelected? "(DM) " : string.Empty)}{selectedChatOrUser}";
+        Logger.LogNote(null, message);
+    }
+
+    private static string FormatAsList<T>(IEnumerable<T> values) => string.Join('\n', values.Select(k => $"* {k}"));
+
+    private static void PrintInstances(PersistentClientState state)
+    {
+        if (state.Instances.Count <= 0)
+        {
+            Logger.LogNote(null, "NO AVAILABLE INSTANCES");
+            return;
+        }
+        Logger.LogNote("AVAILABLE INSTANCES", FormatAsList(state.Instances.Keys));
+    }
+
+    private static void PrintCommandOutput(string output)
+    {
+        Logger.LogNote("OUTPUT", output, ConsoleColor.Green);
     }
 }

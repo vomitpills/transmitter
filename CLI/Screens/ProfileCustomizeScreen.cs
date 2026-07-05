@@ -1,5 +1,7 @@
 ﻿using CLI.Visuals;
 
+using Transmitter.Comms;
+
 namespace CLI.Screens;
 
 public class ProfileCustomizeScreen : Screen
@@ -38,7 +40,7 @@ public class ProfileCustomizeScreen : Screen
     private int selectedFrequency;
 
     private readonly Slider sliderControl = new() { Range = 5, Value = Random.Shared.Next(5 + 1)};
-    private readonly InputBox inputBoxControl = new() { MaxLength = Profile.MaxNameLength };
+    private readonly InputBox inputBoxControl = new();
     private readonly List<Button> colorButtons = [];
 
     protected override Element Root { get; }

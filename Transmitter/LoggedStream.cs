@@ -2,7 +2,7 @@
 
 namespace Transmitter;
 
-internal class LoggedStream(Stream innerStream, Logger logger) : Stream, IDisposable
+internal class LoggedStream(Stream innerStream, ConnectionLogger logger) : Stream, IDisposable
 {
     public override bool CanRead => innerStream.CanRead;
 
@@ -25,7 +25,7 @@ internal class LoggedStream(Stream innerStream, Logger logger) : Stream, IDispos
     public override int Read(byte[] buffer, int offset, int count)
     {
         int bytesRead = innerStream.Read(buffer, offset, count);
-        logger.Log($"<- READ: {Convert.ToHexString(buffer)}");
+        logger.Log($"<- READ: {Convert.ToHexString(buffer[offset..(offset + count)])}");
         return bytesRead;
     }
 
@@ -33,7 +33,7 @@ internal class LoggedStream(Stream innerStream, Logger logger) : Stream, IDispos
     public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
         int bytesRead = await innerStream.ReadAsync(buffer, offset, count, cancellationToken);
-        logger.Log($"<- READ: {Convert.ToHexString(buffer)}");
+        logger.Log($"<- READ: {Convert.ToHexString(buffer[offset..(offset + count)])}");
         return bytesRead;
     }
 
@@ -60,7 +60,7 @@ internal class LoggedStream(Stream innerStream, Logger logger) : Stream, IDispos
     [DebuggerHidden]
     public override void Write(byte[] buffer, int offset, int count)
     {
-        logger.Log($"-> WRITE: {Convert.ToHexString(buffer)}");
+        logger.Log($"-> WRITE: {Convert.ToHexString(buffer[offset..(offset + count)])}");
         innerStream.Write(buffer, offset, count);
     }
 }

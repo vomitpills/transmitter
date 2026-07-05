@@ -1,6 +1,14 @@
 ﻿namespace Transmitter.Comms.Gateways;
 
-public abstract class Gateway : IDisposable
+public interface IGateway : IDisposable
+{
+    void Start();
+    void Stop();
+    bool IsSuitable(GatewayAddress address);
+    Task InitiateConnection(GatewayAddress address, ConnectionOptions options, CancellationToken cancellationToken = default);
+}
+
+public abstract class Gateway<T> : IGateway where T : GatewayAddress
 {
     public delegate Task IncomingTerminalAcceptedHandler(BinaryReader reader, ConnectionOptions options);
     public delegate Task OutgoingTerminalAcceptedHandler(BinaryWriter writer, ConnectionOptions options);
@@ -32,8 +40,15 @@ public abstract class Gateway : IDisposable
 
     //[RequiresStopped]
     public abstract void Start();
+
     //[RequiresStarted]
     public abstract void Stop();
+
+    //[RequiresStarted]
+    Task IGateway.InitiateConnection(GatewayAddress address, ConnectionOptions options, CancellationToken cancellationToken) => InitiateConnection(address as T ?? throw new ArgumentOutOfRangeException(nameof(address)), options, cancellationToken);
+    public abstract Task InitiateConnection(T address, ConnectionOptions options, CancellationToken cancellationToken = default);
+
+    public bool IsSuitable(GatewayAddress address) => address is T;
 
     public abstract void Dispose();
 }

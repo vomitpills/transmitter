@@ -1,0 +1,42 @@
+﻿using Transmitter.Comms.Responses;
+
+namespace Transmitter.Comms.Requests;
+
+public sealed class RecordMailRequest : Request<RecordMailRequest>, IRequest
+{
+    public static RequestIntention Intention => RequestIntention.RecordMail;
+
+    public Mail Mail { get; }
+    public byte MessageIdModulo { get; }
+
+    public RecordMailRequest(Mail mail, ulong messageId)
+    {
+        Mail = mail;
+        MessageIdModulo = (byte)(messageId % byte.MaxValue);
+    }
+
+    private RecordMailRequest(IDeserializationKey key, RequestIntention intention, Mail mail, byte messageIdModulo) : base(key, intention)
+    {
+        Mail = mail;
+        MessageIdModulo = messageIdModulo;
+    }
+
+    public static Request FinalizeDeserialization(BinaryReader reader, RequestIntention intention, IDeserializationKey key)
+    {
+        Mail mail = Mail.Deserialize(reader);
+        byte messageIdModulo = reader.ReadByte();
+        return new RecordMailRequest(key, intention, mail, messageIdModulo);
+    }
+
+    protected override void FinalizeSerialization(BinaryWriter writer)
+    {
+        Mail.Serialize(writer);
+        writer.Write(MessageIdModulo);
+    }
+
+    static ResponseDeserializationFinalizer IRequest.FinalizeResponseDeserialization(ResponsePayloadType responsePayloadType) => responsePayloadType switch
+    {
+        ResponsePayloadType.Empty => EmptyResponse.FinalizeDeserialization,
+        _ => throw new ArgumentOutOfRangeException(nameof(responsePayloadType), responsePayloadType.ToString(), null)
+    };
+}

@@ -8,37 +8,49 @@ public abstract class Transceiver(Predicate<ConnectionOptions>? connectionFilter
     private readonly Dictionary<Guid, BinaryWriter> OutgoingTerminals = [];
     #endregion
 
+    protected readonly HashSet<IGateway> gatewayRack = [];
+
     protected event Action<QAConnection>? NewConnection;
 
-    protected async Task<QAConnection> ConnectAsync(Func<Task> sendTask, CancellationToken cancellationToken = default)
+    protected async Task<QAConnection?> ConnectAsync(GatewayAddress address, ConnectionOptions options, CancellationToken cancellationToken = default)
     {
-        TaskCompletionSource<QAConnection> completionSource = new();
+        IList<IGateway> gateways = [.. gatewayRack.Where(g => g.IsSuitable(address))];
+        if (gateways.Count is 0)
+            return null;
+        IGateway gateway = gateways[Random.Shared.Next(gateways.Count)];
+
+        #region task prep
+        TaskCompletionSource<QAConnection> connectionEstablishedTask = new();
 
         void Callback(QAConnection connection)
         {
             NewConnection -= Callback;
-            completionSource.TrySetResult(connection);
+            connectionEstablishedTask.TrySetResult(connection);
         }
 
         cancellationToken.Register(() =>
         {
             NewConnection -= Callback;
-            completionSource.SetCanceled(cancellationToken);
+            connectionEstablishedTask.SetCanceled(cancellationToken);
         });
 
         NewConnection += Callback;
-        await sendTask();
-        return await completionSource.Task;
+        #endregion
+
+        await gateway.InitiateConnection(address, options, cancellationToken);
+        return await connectionEstablishedTask.Task;
     }
 
-    public void Mount(Gateway gateway)
+    public void Mount<T>(Gateway<T> gateway) where T : GatewayAddress
     {
+        gatewayRack.Add(gateway);
         gateway.IncomingTerminalAccepted += OnIncomingAccepted;
         gateway.OutgoingTerminalAccepted += OnOutgoingAccepted;
     }
 
-    public void Unmount(Gateway gateway)
+    public void Unmount<T>(Gateway<T> gateway) where T : GatewayAddress
     {
+        gatewayRack.Remove(gateway);
         gateway.IncomingTerminalAccepted -= OnIncomingAccepted;
         gateway.OutgoingTerminalAccepted -= OnOutgoingAccepted;
     }
